@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Wavz — Global Internet Radio</title>
+  <meta name="description" content="Stream 50,000+ live radio stations on an interactive 3D globe. Free for Android. No account, no ads, open source under MIT." />
+  <meta name="theme-color" content="#0a0a08" />
+  <link rel="icon" type="image/png" href="./assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a08;
+      --bg-elev: #141412;
+      --bg-card: #1c1c18;
+      --ink: #f1eee3;
+      --ink-soft: #b8b4a6;
+      --ink-mute: #7a766a;
+      --accent: #ff4d6d;
+      --line: #f1eee31a;
+      --line-strong: #f1eee333;
+      --radius: 16px;
+      --shadow-sm: 0 1px 2px #0006;
+      --shadow-md: 0 8px 32px #0005;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; }
+
+    .font-serif { font-family: 'Instrument Serif', serif; }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ============ NAV ============ */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: #0a0a08cc;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+    }
+
+    .logo-slash { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--ink-soft);
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover { color: var(--ink); }
+
+    .github-btn, .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: inherit;
+    }
+
+    .github-btn {
+      border: 1px solid var(--line-strong);
+      color: var(--ink);
+    }
+
+    .github-btn:hover {
+      background: var(--bg-elev);
+      border-color: var(--ink-mute);
+    }
+
+    .download-btn {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 4px 24px #ff4d6d33;
+    }
+
+    .download-btn:hover {
+      background: #ff6885;
+      transform: translateY(-1px);
+    }
+
+    /* ============ HERO ============ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 120px 0 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1100px;
+      height: 700px;
+      background: radial-gradient(ellipse at center, #ff4d6d14 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    h1.hero-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(48px, 8vw, 88px);
+      line-height: 0.9;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      max-width: 960px;
+    }
+
+    .hero-sub {
+      font-size: 20px;
+      color: var(--ink-soft);
+      max-width: 680px;
+      margin-bottom: 40px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .apk-info {
+      font-size: 13px;
+      color: var(--ink-mute);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .apk-info strong { color: var(--ink-soft); font-weight: 600; }
+
+    .phone-frame {
+      margin-top: 64px;
+      position: relative;
+      width: 300px;
+      height: min(620px, 80vh);
+      border-radius: 40px;
+      border: 1px solid var(--line-strong);
+      background: var(--bg-card);
+      box-shadow: var(--shadow-md), inset 0 1px 0 #ffffff0d;
+      overflow: hidden;
+    }
+
+    .phone-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    .phone-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 50%, var(--bg));
+    }
+
+    /* ============ STATS BAR ============ */
+    .stats {
+      padding: 48px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-elev);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 32px;
+    }
+
+    .stat-value {
+      font-size: clamp(32px, 4vw, 48px);
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--ink-mute);
+    }
+
+    /* ============ FEATURES ============ */
+    .section { padding: 120px 0; }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      max-width: 680px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .section-lead {
+      font-size: 18px;
+      color: var(--ink-soft);
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .feature-card:hover {
+      background: #23231f;
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--bg-elev);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .feature-icon svg { color: var(--accent); }
+
+    .feature-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--ink-soft);
+      line-height: 1.6;
+    }
+
+    /* ============ INSTALL ============ */
+    .install-steps {
+      max-width: 720px;
+      margin: 0 auto;
+      list-style: none;
+      counter-reset: step;
+    }
+
+    .install-step {
+      position: relative;
+      padding-left: 64px;
+      margin-bottom: 40px;
+    }
+
+    .install-step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Instrument Serif', serif;
+      font-size: 24px;
+      font-weight: 400;
+      color: var(--accent);
+    }
+
+    .step-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+    .step-desc { font-size: 14px; color: var(--ink-soft); }
+
+    .warning-card {
+      background: #ff4d6d11;
+      border: 1px solid #ff4d6d33;
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-top: 40px;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .warning-card svg { flex-shrink: 0; margin-top: 2px; }
+    .warning-card p { font-size: 14px; color: var(--ink-soft); }
+
+    /* ============ FOOTER ============ */
+    .footer {
+      padding: 64px 0 32px;
+      border-top: 1px solid var(--line);
+      background: var(--bg-elev);
+    }
+
+    .footer-grid {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 40px;
+      margin-bottom: 48px;
+    }
+
+    .footer-links { display: flex; gap: 32px; flex-wrap: wrap; }
+
+    .footer-link {
+      text-decoration: none;
+      color: var(--ink-mute);
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover { color: var(--ink); }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--ink-mute);
+      line-height: 1.6;
+    }
+
+    /* QR Code */
+    #qrcode {
+      display: none;
+      margin: 24px auto 0;
+      padding: 16px;
+      background: white;
+      border-radius: 12px;
+      width: 180px;
+      height: 180px;
+    }
+
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .hero-extra-btns { display: none; }
+      .phone-frame { width: 260px; height: 540px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <header class="nav">
+    <div class="container">
+      <div class="nav-inner">
+        <a href="./" class="logo">
+          <span class="logo-slash">//</span> Wavz
+        </a>
+        <div class="nav-links">
+          <a href="#features" class="nav-link">Features</a>
+          <a href="#install" class="nav-link">Install</a>
+        </div>
+        <a href="https://github.com/sreyassanker/Wavz" class="github-btn" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.03 2.2-.82 2.2-.82.43 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+          </svg>
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow">Free &amp; open source • No account • No ads</p>
+
+      <h1 class="hero-title">RADIO FROM<br /><em>THE WHOLE PLANET,</em><br />IN YOUR POCKET.</h1>
+
+      <p class="hero-sub">
+        Wavz streams <strong>50,000+ live radio stations</strong> from every corner of Earth — wrapped in an interactive 3D globe you can spin, zoom, and tap to listen.
+      </p>
+
+      <div class="hero-cta">
+        <a href="https://github.com/sreyassanker/Wavz/releases/download/v0.1.0/wavz-v0.1.0-arm64.apk"
+           class="download-btn"
+           onclick="document.getElementById('qrcode').style.display='block';"
+           aria-label="Download APK">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download APK (17.8 MB)
+        </a>
+        <a href="https://github.com/sreyassanker/Wavz/releases" class="github-btn hero-extra-btns" target="_blank" rel="noopener">All Releases</a>
+      </div>
+
+      <p class="apk-info">
+        <strong>v0.1.0</strong> • arm64-v8a • <strong>min <span style="font-variant-numeric: tabular-nums;">SDK 24</span></strong> • <strong>targeted at Android&nbsp;16 (API&nbsp;36)</strong> • <strong>Signed &amp; verified</strong>
+      </p>
+
+      <div id="qrcode">
+        <canvas id="qrcode-canvas" width="148" height="148" aria-label="QR code linking to the APK download URL"></canvas>
+      </div>
+
+      <!-- Mockup image (generated with CSS for a placeholder look) -->
+      <div class="phone-frame">
+        <img src="./assets/mockup.png" alt="Wavz app on Android showing 3D globe and station grid" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats bar -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div>
+          <p class="stat-value font-serif">50,468</p>
+          <p class="stat-label">Radio stations indexed</p>
+        </div>
+        <div>
+          <p class="stat-value font-serif">188</p>
+          <p class="stat-label">Countries covered</p>
+        </div>
+        <div>
+          <p class="stat-value font-serif">6</p>
+          <p class="stat-label">Continents represented</p>
+        </div>
+        <div>
+          <p class="stat-value font-serif">4</p>
+          <p class="stat-label">Radio-Browser mirrors</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <p class="eyebrow">Why Wavz?</p>
+        <h2 class="section-title">Every station, one tap away.</h2>
+        <p class="section-lead">
+          A free alternative to TuneIn, built for speed and privacy. No subscriptions, no tracking, no login.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">Interactive 3D globe</h3>
+          <p class="feature-desc">Spin the Earth, zoom into any region, and tap a colored dot to start listening instantly. Stations are plotted by real GPS coordinates.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <path d="M3 5a2 2 0 0 1 2-2h3.28a1 1 0 0 1 .948.684l1.498 4.493a1 1 0 0 1-.502 1.21l-2.257 1.13a11.042 11.042 0 0 0 5.516 5.516l1.13-2.257a1 1 0 0 1 1.21-.502l4.493 1.498a1 1 0 0 1 .684.949V19a2 2 0 0 1-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">50K+ stations, always live</h3>
+          <p class="feature-desc">Refresh from all 4 Radio-Browser mirrors every day. Streams connect directly to broadcasters over HTTPS.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">Offline-first catalog</h3>
+          <p class="feature-desc">Full FTS5 search index kept locally in IndexedDB / SQLite. Browse and search even when you're offline.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
+              <line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">Smart stall recovery</h3>
+          <p class="feature-desc">If a stream hiccups, Wavz silently retries 3 times before giving up. You never tap twice.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">Sleep timer</h3>
+          <p class="feature-desc">Auto-stop after 15 / 30 / 60 minutes. Perfect for drifting off to your favorite late-night station.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M7.46 6.88a6 6 0 0 1 7.63-1.51M16.54 17.12a6 6 0 0 1-7.63 1.51M7.62 17.63a6 6 0 0 1-1.5-7.64M16.38 6.37a6 6 0 0 1 1.5 7.64"/>
+            </svg>
+          </div>
+          <h3 class="feature-name">Blazing search (Ctrl+K)</h3>
+          <p class="feature-desc">Filter 50,000 stations by name, country, city, tag, or language in under 50 ms — powered by a dedicated web worker.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section id="install" class="section">
+    <div class="container">
+      <div class="section-header">
+        <p class="eyebrow">Android only (for now)</p>
+        <h2 class="section-title">Install in 30 seconds.</h2>
+        <p class="section-lead">No Google Play review yet, but installing manually is safe and easy.</p>
+      </div>
+
+      <ol class="install-steps">
+        <li class="install-step">
+          <h3 class="step-title">Download the APK</h3>
+          <p class="step-desc">Tap the download button above. The file is 17.8 MB and min SDK is 24 (Android 7.0+).</p>
+        </li>
+        <li class="install-step">
+          <h3 class="step-title">Allow "Install from unknown sources"</h3>
+          <p class="step-desc">Chrome will prompt you to allow installs. The setting is stored per-app, so it only affects this APK.</p>
+        </li>
+        <li class="install-step">
+          <h3 class="step-title">Open and install</h3>
+          <p class="step-desc">Tap the downloaded file in your notifications, then tap Install. First launch will sync the 50K station catalog.</p>
+        </li>
+      </ol>
+
+      <div class="warning-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+          <path d="M12 9v2m0 4h.01M12 3l9.5 16.5H2.5L12 3z"/>
+        </svg>
+        <p>
+          <strong>Note:</strong> The APK is signed with our release key and verified with <code>apksigner verify</code>. Same signature → future updates install over the top without data loss. Never install APKs from third-party "mirror" sites — only download from the official GitHub release link above.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <a href="./" class="logo">
+          <span class="logo-slash">//</span> Wavz
+        </a>
+        <div class="footer-links">
+          <a href="https://github.com/sreyassanker/Wavz" class="footer-link" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/sreyassanker/Wavz/releases" class="footer-link" target="_blank" rel="noopener">Releases</a>
+          <a href="https://github.com/sreyassanker/Wavz/blob/main/LICENSE" class="footer-link" target="_blank" rel="noopener">MIT License</a>
+          <a href="https://www.radio-browser.info" class="footer-link" target="_blank" rel="noopener">Radio-Browser</a>
+        </div>
+      </div>
+      <p class="footer-copy">
+        Station metadata from the community-run <a href="https://www.radio-browser.info" class="footer-link" target="_blank" rel="noopener">radio-browser.info</a>.<br />
+        Streams are served directly by broadcasters; Wavz never proxies audio. © Wavz Project 2026.
+      </p>
+    </div>
+  </footer>
+
+  <script src="./qrcode.js"></script>
+
+</body>
+</html>
