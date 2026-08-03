@@ -224,6 +224,22 @@ npm run tauri android build -- --apk --release
 
 ---
 
+## Support the Author
+
+If you enjoy Nostu Wavzz, consider supporting the author! Your support helps keep the project alive and growing.
+
+<p align="center">
+  <a href="upi://pay?pa=YOUR_UPI_ID&pn=Your+Name&cu=INR">
+    <img src="https://img.shields.io/badge/Support_via_UPI-ff4d6d?style=for-the-badge&logo=googlepay&logoColor=white" alt="Support via UPI" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>UPI ID:</strong> <code>YOUR_UPI_ID</code>
+</p>
+
+---
+
 ## License
 
 [MIT](LICENSE) — Copyright © 2026 Nostu Wavzz
