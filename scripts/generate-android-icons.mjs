@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { join } from 'path';
 
 const ROOT = 'C:/Users/sreya/Downloads/Wavz';
-const SRC = join(ROOT, 'new-icon.jpg');
+const SRC = join(ROOT, 'src-tauri/icons/icon.png');
 const ANDROID = join(ROOT, 'src-tauri/icons/android');
 
 const densities = [
