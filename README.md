@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sreyassanker/NostuWavzz/releases">
+  <a href="https://github.com/sreyassanker/nostuwavzz/releases">
     <img src="https://img.shields.io/badge/Download-APK-ff4d6d?style=for-the-badge" alt="Download APK" />
   </a>
   <a href="#license">

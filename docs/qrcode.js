@@ -15,7 +15,7 @@
     if (!canvas) return false;
 
     // Try the simple approach first using Google Charts API (no external deps needed)
-    const url = 'https://github.com/sreyassanker/NostuWavzz/releases/download/v0.1.0/nostu-wavzz-v0.1.0-arm64.apk';
+    const url = 'https://github.com/sreyassanker/nostuwavzz/releases/download/v0.1.0/nostu-wavzz-v0.1.0-arm64.apk';
     const chartUrl = `https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl=${encodeURIComponent(url)}&choe=UTF-8`;
 
     const img = new Image();
@@ -41,7 +41,7 @@
 
   // Generate QR when DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
-    generateQRCode('qrcode-canvas', 'https://github.com/sreyassanker/NostuWavzz/releases/download/v0.1.0/nostu-wavzz-v0.1.0-arm64.apk');
+    generateQRCode('qrcode-canvas', 'https://github.com/sreyassanker/nostuwavzz/releases/download/v0.1.0/nostu-wavzz-v0.1.0-arm64.apk');
   });
 
   // Expose for manual call
