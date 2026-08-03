@@ -1,23 +1,41 @@
-# Wavz
+<p align="center">
+  <img src="src-tauri/icons/icon.png" alt="Nostu Wavzz" width="120" />
+</p>
 
-**Wavz** is a free, open-source internet radio player that gives you instant access to **50,000+ live radio stations** from every corner of the planet — streamed through an interactive 3D globe.
+<h1 align="center">Nostu Wavzz</h1>
 
-Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, lightweight (~10 MB installer), and cross-platform: **Windows, macOS, Linux, and Android**.
+<p align="center">
+  <strong>Rediscover the magic of radio.</strong><br />
+  50,000+ live stations from every corner of the planet, streaming freely.<br />
+  No account. No ads. Just you and the dial.
+</p>
+
+<p align="center">
+  <a href="https://github.com/sreyassanker/NostuWavzz/releases">
+    <img src="https://img.shields.io/badge/Download-APK-ff4d6d?style=for-the-badge" alt="Download APK" />
+  </a>
+  <a href="#license">
+    <img src="https://img.shields.io/badge/License-MIT-7a766a?style=for-the-badge" alt="MIT License" />
+  </a>
+  <a href="https://github.com/sreyassanker">
+    <img src="https://img.shields.io/badge/Author-@sreyassanker-1c1c18?style=for-the-badge" alt="Author" />
+  </a>
+</p>
 
 ---
 
-## Screenshots
+## What is Nostu Wavzz?
 
-| Station Grid | 3D Globe | Player Bar |
-|---|---|---|
-| Browse & filter 50 000+ stations | Explore stations on a live globe | Persistent mini-player with controls |
+Nostu Wavzz is a free, open-source internet radio player that brings back the nostalgia of radio — that feeling of tuning in to a distant city, discovering a new station, and letting the music carry you away.
+
+Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, lightweight (~10 MB installer), and cross-platform: **Windows, macOS, Linux, and Android**.
 
 ---
 
 ## Features
 
 ### Discovery
-- **50 000+ stations** — full index sourced from the community-run [radio-browser.info](https://radio-browser.info) directory
+- **50,000+ stations** — full index sourced from the community-run [radio-browser.info](https://radio-browser.info) directory
 - **Interactive 3D Globe** — stations plotted by real coordinates; click a dot to listen instantly
 - **Full-text search** — press `Ctrl+K` / `Cmd+K` anywhere, search by name, country, genre, or language
 - **Smart filters** — filter by continent, country, tag/genre, or favorites
@@ -32,8 +50,8 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 
 ### Data & Performance
 - **Offline-first** — full station catalog cached locally (IndexedDB in browser, SQLite FTS5 on desktop/Android)
-- **Background sync** — catalog refreshes automatically every 24 h
-- **Web Worker filtering** — search & filter run off the main thread; the UI never stutters, even with 50 K rows
+- **Background sync** — catalog refreshes automatically every 24h
+- **Web Worker filtering** — search & filter run off the main thread; the UI never stutters, even with 50K rows
 - **Virtualized grid** — smooth scrolling through thousands of station cards
 - **Favicon cache** — station logos stored locally with 7-day TTL + LRU eviction
 - **Favorites** — one-tap heart, persisted across sessions
@@ -64,19 +82,15 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 ## Project Structure
 
 ```
-Radio-Global/
+NostuWavzz/
 ├── index.html                 # Web entry point
 ├── package.json               # npm scripts & dependencies
 ├── vite.config.ts             # Vite + Tailwind + React plugins
 ├── tsconfig.json
 │
-├── public/
-│   ├── favicon.svg
-│   └── icons.svg              # SVG sprite
-│
 ├── src/                       # React frontend
 │   ├── main.tsx               # React bootstrap
-│   ├── App.tsx                # Root: boot, filtering orchestration, player glue
+│   ├── App.tsx                # Root: boot, filtering, player logic
 │   ├── index.css              # Global styles (Tailwind + design tokens)
 │   │
 │   ├── components/
@@ -91,7 +105,7 @@ Radio-Global/
 │   │
 │   ├── lib/
 │   │   ├── api.ts             # radio-browser.info client, normalizers, continent mapping
-│   │   ├── fetchStations.ts   # Batch downloader (4 mirrors, 1 000/batch, ≤ 50 K)
+│   │   ├── fetchStations.ts   # Batch downloader (4 mirrors, 1K/batch, ≤50K)
 │   │   ├── audioEngine.ts     # Custom audio engine w/ stall recovery & reconnect
 │   │   ├── stationCache.ts    # IndexedDB station persistence
 │   │   ├── imageCache.ts      # IndexedDB favicon cache (LRU, 7-day TTL)
@@ -108,17 +122,20 @@ Radio-Global/
 │   ├── tauri.conf.json        # App identity, window, CSP, bundle
 │   ├── build.rs
 │   ├── capabilities/default.json
-│   ├── icons/                 # Windows / macOS / iOS / Android icon sets
+│   ├── icons/                 # App icons (all platforms)
 │   └── src/
 │       ├── main.rs            # Entry point
 │       └── lib.rs             # SQLite + FTS5, 11 Tauri commands, daily auto-sync
 │
-└── src.old/                   # Legacy vanilla-JS version (reference only)
+└── docs/                      # Landing page
+    └── index.html             # Professional marketing site
 ```
 
 ---
 
-## Prerequisites
+## Getting Started
+
+### Prerequisites
 
 | Tool | Version | Purpose |
 |---|---|---|
@@ -126,29 +143,18 @@ Radio-Global/
 | [Rust](https://rustup.rs) | stable (≥ 1.77) | Tauri backend |
 | Tauri CLI | `npm i -D @tauri-apps/cli` v2 | Build & dev commands |
 
-### For Android builds additionally
-
-| Tool | Version |
-|---|---|
-| JDK (Temurin / OpenJDK) | 17 |
-| Android SDK Command-line Tools | latest |
-| Android Platform | **android-36** (Android 16) |
-| Android NDK | r27+ |
-| Rust Android targets | `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android` |
-
----
-
-## Getting Started
+### Run in Browser
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2a. Run in the browser (pure web mode, no Rust needed)
 npm run dev
 # → http://localhost:5173
+```
 
-# 2b. Run as a desktop app (requires Rust toolchain)
+### Run as Desktop App
+
+```bash
+npm install
 npm run tauri dev
 ```
 
@@ -167,83 +173,43 @@ Bundles land in `src-tauri/target/release/bundle/`:
 - macOS → `.app`, `.dmg`
 - Linux → `.AppImage`, `.deb`
 
-### Android — APK / AAB (Android 16, API 36)
+### Android
 
 One-time setup:
 
-```powershell
+```bash
 # Rust Android targets
 rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
 
-# Point the CLI at your SDK / NDK
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:NDK_HOME     = "$env:ANDROID_HOME\ndk\<version>"
+# Set environment variables
+export ANDROID_HOME="$HOME/Android/Sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/<version>"
 
-# Generate the Android project (once)
+# Generate the Android project
 npm run tauri android init
 ```
 
-Debug APK (fast, for testing):
+Build APK:
 
 ```bash
+# Debug
 npm run tauri android build -- --apk
-```
 
-Release APK (optimized):
-
-```bash
+# Release
 npm run tauri android build -- --apk --release
 ```
 
-Outputs:
-
-```
-src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
-```
-
-> **Target SDK** is set to **36 (Android 16)** in `src-tauri/gen/android/app/build.gradle.kts`; minimum SDK 24 (Android 7.0).
-> Release APKs are signed with the debug keystore by default — generate your own keystore with `keytool` and configure it in `build.gradle.kts` for Play Store distribution.
-
----
-
-## Android Permissions
-
-Declared automatically / manually in `AndroidManifest.xml`:
-
-| Permission | Why |
-|---|---|
-| `INTERNET` | Streaming audio & fetching the station directory |
-| `ACCESS_NETWORK_STATE` | Detect connectivity loss for auto-reconnect |
-| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Keep audio alive with the screen off |
+> **Target SDK:** 36 (Android 16) | **Min SDK:** 24 (Android 7.0)
 
 ---
 
 ## Configuration
 
-| File | What it controls |
+| File | Description |
 |---|---|
-| `src-tauri/tauri.conf.json` | App id (`com.wavz.app`), window size, CSP, bundle icons |
+| `src-tauri/tauri.conf.json` | App id, window size, CSP, bundle icons |
 | `src/index.css` | Design tokens (colors, shadows, radii) |
 | `src/lib/fetchStations.ts` | Mirror list, batch size, station cap |
-
-**Content Security Policy** (desktop):
-
-```
-default-src 'self';
-connect-src 'self' https://*.api.radio-browser.info https://raw.githubusercontent.com;
-media-src  'self' https:;
-img-src    'self' blob: data: https:;
-```
-
----
-
-## Data Source
-
-All station metadata comes from **[radio-browser.info](https://www.radio-browser.info)** — a free, community-driven wiki of internet radio stations.
-- Catalog fetched from 4 rotating mirrors (`de1`, `nl1`, `fr1`, `at1`)
-- Only `https://` streams with passing health checks are kept
-- Streams connect directly to broadcasters; Wavz never proxies audio
 
 ---
 
@@ -260,7 +226,7 @@ All station metadata comes from **[radio-browser.info](https://www.radio-browser
 
 ## License
 
-MIT — see `LICENSE`.
+[MIT](LICENSE) — Copyright © 2026 Nostu Wavzz
 
-Station metadata © radio-browser.info contributors (open data).
+Station metadata © [radio-browser.info](https://www.radio-browser.info) contributors (open data).  
 Audio streams © their respective broadcasters.

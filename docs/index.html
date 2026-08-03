@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Wavz — Global Internet Radio</title>
-  <meta name="description" content="Stream 50,000+ live radio stations on an interactive 3D globe. Free for Android. No account, no ads, open source under MIT." />
+  <title>Nostu Wavzz — Global Internet Radio</title>
+  <meta name="description" content="Nostu Wavzz — rediscover the magic of radio. 50,000+ live stations from every corner of the planet, streaming freely. No account, no ads, just pure radio nostalgia." />
   <meta name="theme-color" content="#0a0a08" />
   <link rel="icon" type="image/png" href="./assets/icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,14 +19,19 @@
       --ink-soft: #b8b4a6;
       --ink-mute: #7a766a;
       --accent: #ff4d6d;
+      --accent-glow: rgba(255, 77, 109, 0.4);
       --line: #f1eee31a;
       --line-strong: #f1eee333;
       --radius: 16px;
       --shadow-sm: 0 1px 2px #0006;
       --shadow-md: 0 8px 32px #0005;
+      --shadow-lg: 0 16px 64px #0008;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
 
     body {
       background: var(--bg);
@@ -48,6 +53,32 @@
       padding: 0 24px;
     }
 
+    /* ============ ANIMATIONS ============ */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .fade-in {
+      opacity: 0;
+      animation: fadeInUp 0.8s ease forwards;
+    }
+
+    .fade-in-delay-1 { animation-delay: 0.1s; }
+    .fade-in-delay-2 { animation-delay: 0.2s; }
+    .fade-in-delay-3 { animation-delay: 0.3s; }
+    .fade-in-delay-4 { animation-delay: 0.4s; }
+
     /* ============ NAV ============ */
     .nav {
       position: fixed;
@@ -55,16 +86,23 @@
       left: 0;
       right: 0;
       z-index: 100;
-      backdrop-filter: blur(12px);
-      background: #0a0a08cc;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(10, 10, 8, 0.85);
       border-bottom: 1px solid var(--line);
+      transition: var(--transition);
+    }
+
+    .nav.scrolled {
+      background: rgba(10, 10, 8, 0.95);
+      box-shadow: var(--shadow-md);
     }
 
     .nav-inner {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      height: 64px;
+      height: 72px;
     }
 
     .logo {
@@ -72,16 +110,17 @@
       align-items: center;
       gap: 8px;
       font-weight: 700;
-      font-size: 18px;
-      letter-spacing: -0.02em;
+      font-size: 20px;
+      letter-spacing: -0.03em;
       text-decoration: none;
+      transition: var(--transition);
     }
 
-    .logo-slash { color: var(--accent); }
+    .logo:hover { opacity: 0.8; }
 
     .nav-links {
       display: flex;
-      gap: 32px;
+      gap: 36px;
       align-items: center;
     }
 
@@ -90,21 +129,34 @@
       color: var(--ink-soft);
       font-size: 14px;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: var(--transition);
+      position: relative;
+    }
+
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--accent);
+      transition: var(--transition);
     }
 
     .nav-link:hover { color: var(--ink); }
+    .nav-link:hover::after { width: 100%; }
 
     .github-btn, .download-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 10px 20px;
       border-radius: 999px;
       font-size: 14px;
       font-weight: 600;
       text-decoration: none;
-      transition: all 0.2s;
+      transition: var(--transition);
       cursor: pointer;
       border: none;
       background: none;
@@ -119,17 +171,22 @@
     .github-btn:hover {
       background: var(--bg-elev);
       border-color: var(--ink-mute);
+      transform: translateY(-1px);
     }
 
     .download-btn {
-      background: var(--accent);
-      color: #000;
-      box-shadow: 0 4px 24px #ff4d6d33;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff6b8a 100%);
+      color: #fff;
+      box-shadow: 0 4px 24px var(--accent-glow);
     }
 
     .download-btn:hover {
-      background: #ff6885;
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px var(--accent-glow);
+    }
+
+    .download-btn:active {
+      transform: translateY(0);
     }
 
     /* ============ HERO ============ */
@@ -139,7 +196,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 120px 0 80px;
+      padding: 120px 0 100px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -148,185 +205,228 @@
     .hero::before {
       content: '';
       position: absolute;
-      top: 20%;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      width: 1100px;
-      height: 700px;
-      background: radial-gradient(ellipse at center, #ff4d6d14 0%, transparent 60%);
+      transform: translate(-50%, -50%);
+      width: 1200px;
+      height: 800px;
+      background: radial-gradient(ellipse at center, rgba(255, 77, 109, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 200px;
+      background: linear-gradient(to top, var(--bg) 0%, transparent 100%);
       pointer-events: none;
     }
 
     .eyebrow {
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.2em;
       color: var(--accent);
       font-weight: 600;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
+      padding: 8px 20px;
+      border: 1px solid rgba(255, 77, 109, 0.3);
+      border-radius: 999px;
+      display: inline-block;
     }
 
     h1.hero-title {
       font-family: 'Instrument Serif', serif;
-      font-size: clamp(48px, 8vw, 88px);
-      line-height: 0.9;
+      font-size: clamp(48px, 8vw, 96px);
+      line-height: 1.1;
       font-weight: 400;
-      letter-spacing: -0.02em;
-      margin-bottom: 24px;
-      max-width: 960px;
+      letter-spacing: -0.03em;
+      margin-bottom: 40px;
+      max-width: 900px;
+    }
+
+    h1.hero-title em {
+      font-style: italic;
+      color: var(--accent);
     }
 
     .hero-sub {
       font-size: 20px;
       color: var(--ink-soft);
-      max-width: 680px;
-      margin-bottom: 40px;
+      max-width: 640px;
+      margin-bottom: 48px;
+      line-height: 1.7;
     }
 
     .hero-cta {
       display: flex;
-      gap: 12px;
+      gap: 16px;
       flex-wrap: wrap;
       justify-content: center;
-      margin-bottom: 24px;
+      margin-bottom: 32px;
     }
 
     .apk-info {
       font-size: 13px;
       color: var(--ink-mute);
       font-variant-numeric: tabular-nums;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     .apk-info strong { color: var(--ink-soft); font-weight: 600; }
-
-    .phone-frame {
-      margin-top: 64px;
-      position: relative;
-      width: 300px;
-      height: min(620px, 80vh);
-      border-radius: 40px;
-      border: 1px solid var(--line-strong);
-      background: var(--bg-card);
-      box-shadow: var(--shadow-md), inset 0 1px 0 #ffffff0d;
-      overflow: hidden;
-    }
-
-    .phone-frame img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: top;
-    }
-
-    .phone-frame::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, transparent 50%, var(--bg));
-    }
+    .apk-info span { color: var(--ink-mute); }
 
     /* ============ STATS BAR ============ */
     .stats {
-      padding: 48px 0;
+      padding: 64px 0;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
       background: var(--bg-elev);
+      position: relative;
+    }
+
+    .stats::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
     }
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 32px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 48px;
+      text-align: center;
+    }
+
+    .stat-item {
+      padding: 16px 0;
     }
 
     .stat-value {
-      font-size: clamp(32px, 4vw, 48px);
+      font-size: clamp(36px, 5vw, 56px);
       font-family: 'Instrument Serif', serif;
       font-weight: 400;
       line-height: 1;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--ink) 0%, var(--ink-soft) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .stat-label {
       font-size: 14px;
       color: var(--ink-mute);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 500;
     }
 
     /* ============ FEATURES ============ */
-    .section { padding: 120px 0; }
+    .section { padding: 140px 0; }
 
     .section-header {
       text-align: center;
-      margin-bottom: 64px;
+      margin-bottom: 80px;
     }
 
     .section-title {
       font-family: 'Instrument Serif', serif;
-      font-size: clamp(36px, 6vw, 64px);
+      font-size: clamp(36px, 6vw, 72px);
       font-weight: 400;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
-      max-width: 680px;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+      max-width: 700px;
       margin-left: auto;
       margin-right: auto;
+      line-height: 1.1;
     }
 
     .section-lead {
       font-size: 18px;
       color: var(--ink-soft);
-      max-width: 640px;
+      max-width: 600px;
       margin: 0 auto;
+      line-height: 1.7;
     }
 
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 24px;
-      margin-top: 48px;
     }
 
     .feature-card {
       background: var(--bg-card);
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 24px;
-      transition: background 0.2s, transform 0.2s;
+      border-radius: 20px;
+      padding: 32px;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0;
+      transition: var(--transition);
     }
 
     .feature-card:hover {
       background: #23231f;
-      transform: translateY(-2px);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--line-strong);
     }
 
+    .feature-card:hover::before { opacity: 1; }
+
     .feature-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: var(--bg-elev);
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(255, 77, 109, 0.15) 0%, rgba(255, 77, 109, 0.05) 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
 
     .feature-icon svg { color: var(--accent); }
 
     .feature-name {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
-      margin-bottom: 8px;
-      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
     }
 
     .feature-desc {
-      font-size: 14px;
+      font-size: 15px;
       color: var(--ink-soft);
-      line-height: 1.6;
+      line-height: 1.7;
     }
 
     /* ============ INSTALL ============ */
     .install-steps {
-      max-width: 720px;
+      max-width: 680px;
       margin: 0 auto;
       list-style: none;
       counter-reset: step;
@@ -334,8 +434,8 @@
 
     .install-step {
       position: relative;
-      padding-left: 64px;
-      margin-bottom: 40px;
+      padding-left: 72px;
+      margin-bottom: 48px;
     }
 
     .install-step::before {
@@ -344,9 +444,9 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
       background: var(--bg-card);
       border: 1px solid var(--line);
       display: flex;
@@ -356,33 +456,174 @@
       font-size: 24px;
       font-weight: 400;
       color: var(--accent);
+      transition: var(--transition);
     }
 
-    .step-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-    .step-desc { font-size: 14px; color: var(--ink-soft); }
+    .install-step:hover::before {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .step-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .step-desc { font-size: 15px; color: var(--ink-soft); line-height: 1.6; }
 
     .warning-card {
-      background: #ff4d6d11;
-      border: 1px solid #ff4d6d33;
-      border-radius: var(--radius);
-      padding: 20px 24px;
+      background: rgba(255, 77, 109, 0.08);
+      border: 1px solid rgba(255, 77, 109, 0.2);
+      border-radius: 16px;
+      padding: 24px;
       display: flex;
       align-items: flex-start;
       gap: 16px;
-      margin-top: 40px;
-      max-width: 720px;
+      margin-top: 48px;
+      max-width: 680px;
       margin-left: auto;
       margin-right: auto;
     }
 
-    .warning-card svg { flex-shrink: 0; margin-top: 2px; }
-    .warning-card p { font-size: 14px; color: var(--ink-soft); }
+    .warning-card svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+    .warning-card p { font-size: 14px; color: var(--ink-soft); line-height: 1.6; }
+
+    /* ============ LICENSE ============ */
+    .license-section {
+      padding: 100px 0;
+      border-top: 1px solid var(--line);
+      background: var(--bg);
+    }
+
+    .license-card {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .license-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), #ff6b8a, var(--accent));
+    }
+
+    .license-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 32px;
+      font-weight: 400;
+      margin-bottom: 24px;
+      color: var(--accent);
+    }
+
+    .license-text {
+      font-size: 13px;
+      color: var(--ink-soft);
+      line-height: 1.9;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      white-space: pre-wrap;
+      opacity: 0.8;
+    }
+
+    /* ============ CONTACT ============ */
+    .contact-section {
+      padding: 100px 0;
+      border-top: 1px solid var(--line);
+      background: var(--bg-elev);
+      position: relative;
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 56px;
+    }
+
+    .contact-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 40px 32px;
+      text-align: center;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .contact-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0;
+      transition: var(--transition);
+    }
+
+    .contact-card:hover {
+      border-color: var(--line-strong);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .contact-card:hover::after { opacity: 1; }
+
+    .contact-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(255, 77, 109, 0.15) 0%, rgba(255, 77, 109, 0.05) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .contact-icon svg { color: var(--accent); }
+
+    .contact-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .contact-detail {
+      font-size: 14px;
+      color: var(--ink-soft);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .contact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: var(--transition);
+      padding: 8px 16px;
+      border-radius: 8px;
+    }
+
+    .contact-link:hover {
+      background: rgba(255, 77, 109, 0.1);
+    }
 
     /* ============ FOOTER ============ */
     .footer {
-      padding: 64px 0 32px;
+      padding: 80px 0 40px;
       border-top: 1px solid var(--line);
-      background: var(--bg-elev);
+      background: var(--bg);
     }
 
     .footer-grid {
@@ -394,13 +635,19 @@
       margin-bottom: 48px;
     }
 
-    .footer-links { display: flex; gap: 32px; flex-wrap: wrap; }
+    .footer-logo {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .footer-links { display: flex; gap: 36px; flex-wrap: wrap; }
 
     .footer-link {
       text-decoration: none;
       color: var(--ink-mute);
       font-size: 14px;
-      transition: color 0.2s;
+      transition: var(--transition);
     }
 
     .footer-link:hover { color: var(--ink); }
@@ -408,7 +655,22 @@
     .footer-copy {
       font-size: 13px;
       color: var(--ink-mute);
-      line-height: 1.6;
+      line-height: 1.7;
+    }
+
+    .footer-divider {
+      width: 100%;
+      height: 1px;
+      background: var(--line);
+      margin: 40px 0;
+    }
+
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 24px;
     }
 
     /* QR Code */
@@ -417,36 +679,53 @@
       margin: 24px auto 0;
       padding: 16px;
       background: white;
-      border-radius: 12px;
+      border-radius: 16px;
       width: 180px;
       height: 180px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* ============ RESPONSIVE ============ */
+    @media (max-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .contact-grid { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
     }
 
     @media (max-width: 640px) {
       .nav-links { display: none; }
       .hero-extra-btns { display: none; }
-      .phone-frame { width: 260px; height: 540px; }
+      .hero { padding: 100px 0 80px; }
+      h1.hero-title { font-size: clamp(40px, 10vw, 64px); }
+      .hero-sub { font-size: 17px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+      .section { padding: 100px 0; }
+      .license-card { padding: 32px 24px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+      .footer-grid { flex-direction: column; text-align: center; }
+      .footer-links { justify-content: center; }
     }
   </style>
 </head>
 <body>
 
   <!-- Nav -->
-  <header class="nav">
+  <header class="nav" id="nav">
     <div class="container">
       <div class="nav-inner">
-        <a href="./" class="logo">
-          <span class="logo-slash">//</span> Wavz
-        </a>
+        <a href="./" class="logo">Nostu Wavzz</a>
         <div class="nav-links">
           <a href="#features" class="nav-link">Features</a>
           <a href="#install" class="nav-link">Install</a>
+          <a href="#license" class="nav-link">License</a>
+          <a href="#contact" class="nav-link">Contact</a>
         </div>
-        <a href="https://github.com/sreyassanker/Wavz" class="github-btn" target="_blank" rel="noopener">
+        <a href="https://github.com/sreyassanker" class="github-btn" target="_blank" rel="noopener">
           <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.03 2.2-.82 2.2-.82.43 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
           </svg>
-          View on GitHub
+          GitHub
         </a>
       </div>
     </div>
@@ -455,38 +734,34 @@
   <!-- Hero -->
   <section class="hero">
     <div class="container">
-      <p class="eyebrow">Free &amp; open source • No account • No ads</p>
+      <p class="eyebrow fade-in">The nostalgia of radio, reimagined</p>
 
-      <h1 class="hero-title">RADIO FROM<br /><em>THE WHOLE PLANET,</em><br />IN YOUR POCKET.</h1>
+      <h1 class="hero-title fade-in fade-in-delay-1">REMEMBER THE<br /><em>MAGIC OF RADIO?</em><br />IT'S STILL HERE.</h1>
 
-      <p class="hero-sub">
-        Wavz streams <strong>50,000+ live radio stations</strong> from every corner of Earth — wrapped in an interactive 3D globe you can spin, zoom, and tap to listen.
+      <p class="hero-sub fade-in fade-in-delay-2">
+        Close your eyes and drift back to when radio meant everything — a crackle of static, a voice from a distant city, a song you'd never heard before.<br /><br />
+        <strong>Nostu Wavzz</strong> brings that feeling back. <strong>50,000+ live stations</strong> from every corner of the planet, streaming freely. No account. No ads. Just you and the dial.
       </p>
 
-      <div class="hero-cta">
-        <a href="https://github.com/sreyassanker/Wavz/releases/download/v0.1.0/wavz-v0.1.0-arm64.apk"
+      <div class="hero-cta fade-in fade-in-delay-3">
+        <a href="https://github.com/sreyassanker/NostuWavzz/releases/download/v0.1.0/nostu-wavzz-v0.1.0-arm64.apk"
            class="download-btn"
            onclick="document.getElementById('qrcode').style.display='block';"
            aria-label="Download APK">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download APK (17.8 MB)
+          Download APK
         </a>
-        <a href="https://github.com/sreyassanker/Wavz/releases" class="github-btn hero-extra-btns" target="_blank" rel="noopener">All Releases</a>
+        <a href="https://github.com/sreyassanker/NostuWavzz/releases" class="github-btn hero-extra-btns" target="_blank" rel="noopener">All Releases</a>
       </div>
 
-      <p class="apk-info">
-        <strong>v0.1.0</strong> • arm64-v8a • <strong>min <span style="font-variant-numeric: tabular-nums;">SDK 24</span></strong> • <strong>targeted at Android&nbsp;16 (API&nbsp;36)</strong> • <strong>Signed &amp; verified</strong>
+      <p class="apk-info fade-in fade-in-delay-4">
+        <strong>v0.1.0</strong> <span>•</span> <strong>arm64-v8a</strong> <span>•</span> <strong>min SDK 24</strong> <span>•</span> <strong>Android 16 (API 36)</strong> <span>•</span> <strong>Signed & verified</strong>
       </p>
 
       <div id="qrcode">
         <canvas id="qrcode-canvas" width="148" height="148" aria-label="QR code linking to the APK download URL"></canvas>
-      </div>
-
-      <!-- Mockup image (generated with CSS for a placeholder look) -->
-      <div class="phone-frame">
-        <img src="./assets/mockup.png" alt="Wavz app on Android showing 3D globe and station grid" />
       </div>
     </div>
   </section>
@@ -495,21 +770,21 @@
   <section class="stats">
     <div class="container">
       <div class="stats-grid">
-        <div>
+        <div class="stat-item">
           <p class="stat-value font-serif">50,468</p>
-          <p class="stat-label">Radio stations indexed</p>
+          <p class="stat-label">Live Stations</p>
         </div>
-        <div>
+        <div class="stat-item">
           <p class="stat-value font-serif">188</p>
-          <p class="stat-label">Countries covered</p>
+          <p class="stat-label">Countries</p>
         </div>
-        <div>
+        <div class="stat-item">
           <p class="stat-value font-serif">6</p>
-          <p class="stat-label">Continents represented</p>
+          <p class="stat-label">Continents</p>
         </div>
-        <div>
-          <p class="stat-value font-serif">4</p>
-          <p class="stat-label">Radio-Browser mirrors</p>
+        <div class="stat-item">
+          <p class="stat-value font-serif">0</p>
+          <p class="stat-label">Ads or Tracking</p>
         </div>
       </div>
     </div>
@@ -519,74 +794,74 @@
   <section id="features" class="section">
     <div class="container">
       <div class="section-header">
-        <p class="eyebrow">Why Wavz?</p>
-        <h2 class="section-title">Every station, one tap away.</h2>
+        <p class="eyebrow">Why Nostu Wavzz?</p>
+        <h2 class="section-title">Radio, the way it was meant to be.</h2>
         <p class="section-lead">
-          A free alternative to TuneIn, built for speed and privacy. No subscriptions, no tracking, no login.
+          No accounts. No algorithms deciding what you hear. No ads interrupting your favorite song. Just you, the dial, and the whole world.
         </p>
       </div>
 
       <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
             </svg>
           </div>
-          <h3 class="feature-name">Interactive 3D globe</h3>
-          <p class="feature-desc">Spin the Earth, zoom into any region, and tap a colored dot to start listening instantly. Stations are plotted by real GPS coordinates.</p>
+          <h3 class="feature-name">The whole world, on a globe</h3>
+          <p class="feature-desc">Spin the Earth, watch it glow with stations from 188 countries. Tap any dot and hear what's playing right now — live from Tokyo, Lagos, Buenos Aires, or a village you've never heard of.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <path d="M3 5a2 2 0 0 1 2-2h3.28a1 1 0 0 1 .948.684l1.498 4.493a1 1 0 0 1-.502 1.21l-2.257 1.13a11.042 11.042 0 0 0 5.516 5.516l1.13-2.257a1 1 0 0 1 1.21-.502l4.493 1.498a1 1 0 0 1 .684.949V19a2 2 0 0 1-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
             </svg>
           </div>
-          <h3 class="feature-name">50K+ stations, always live</h3>
-          <p class="feature-desc">Refresh from all 4 Radio-Browser mirrors every day. Streams connect directly to broadcasters over HTTPS.</p>
+          <h3 class="feature-name">50,000+ stations, always live</h3>
+          <p class="feature-desc">From talk radio in Berlin to jazz in New Orleans, from Bollywood beats in Mumbai to ambient sounds in Reykjavik. Every station, live and direct.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/>
             </svg>
           </div>
-          <h3 class="feature-name">Offline-first catalog</h3>
-          <p class="feature-desc">Full FTS5 search index kept locally in IndexedDB / SQLite. Browse and search even when you're offline.</p>
+          <h3 class="feature-name">Your station, always ready</h3>
+          <p class="feature-desc">Every station cached locally on your device. Search, browse, and discover — even without internet. Your favorites, always a tap away.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
               <line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
             </svg>
           </div>
-          <h3 class="feature-name">Smart stall recovery</h3>
-          <p class="feature-desc">If a stream hiccups, Wavz silently retries 3 times before giving up. You never tap twice.</p>
+          <h3 class="feature-name">Uninterrupted vibes</h3>
+          <p class="feature-desc">Spotty connection? Bad signal? Nostu Wavzz silently retries until your stream comes back. Because nothing kills the mood like a dead station.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
             </svg>
           </div>
-          <h3 class="feature-name">Sleep timer</h3>
-          <p class="feature-desc">Auto-stop after 15 / 30 / 60 minutes. Perfect for drifting off to your favorite late-night station.</p>
+          <h3 class="feature-name">Fall asleep to the world</h3>
+          <p class="feature-desc">Set a sleep timer and drift off to the sound of a distant city. Radio has always been the best lullaby — now it comes with a timer.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
               <circle cx="12" cy="12" r="3"/>
               <path d="M7.46 6.88a6 6 0 0 1 7.63-1.51M16.54 17.12a6 6 0 0 1-7.63 1.51M7.62 17.63a6 6 0 0 1-1.5-7.64M16.38 6.37a6 6 0 0 1 1.5 7.64"/>
             </svg>
           </div>
-          <h3 class="feature-name">Blazing search (Ctrl+K)</h3>
-          <p class="feature-desc">Filter 50,000 stations by name, country, city, tag, or language in under 50 ms — powered by a dedicated web worker.</p>
+          <h3 class="feature-name">Find your station in a flash</h3>
+          <p class="feature-desc">Search 50,000 stations by name, country, language, or genre in milliseconds. Press Ctrl+K and find exactly what you're looking for.</p>
         </div>
       </div>
     </div>
@@ -597,17 +872,17 @@
     <div class="container">
       <div class="section-header">
         <p class="eyebrow">Android only (for now)</p>
-        <h2 class="section-title">Install in 30 seconds.</h2>
-        <p class="section-lead">No Google Play review yet, but installing manually is safe and easy.</p>
+        <h2 class="section-title">Start listening in seconds.</h2>
+        <p class="section-lead">No Google Play needed. Just download, install, and rediscover radio.</p>
       </div>
 
       <ol class="install-steps">
         <li class="install-step">
           <h3 class="step-title">Download the APK</h3>
-          <p class="step-desc">Tap the download button above. The file is 17.8 MB and min SDK is 24 (Android 7.0+).</p>
+          <p class="step-desc">Tap the download button above. The file is 17.8 MB and works on Android 7.0+.</p>
         </li>
         <li class="install-step">
-          <h3 class="step-title">Allow "Install from unknown sources"</h3>
+          <h3 class="step-title">Allow unknown sources</h3>
           <p class="step-desc">Chrome will prompt you to allow installs. The setting is stored per-app, so it only affects this APK.</p>
         </li>
         <li class="install-step">
@@ -621,8 +896,105 @@
           <path d="M12 9v2m0 4h.01M12 3l9.5 16.5H2.5L12 3z"/>
         </svg>
         <p>
-          <strong>Note:</strong> The APK is signed with our release key and verified with <code>apksigner verify</code>. Same signature → future updates install over the top without data loss. Never install APKs from third-party "mirror" sites — only download from the official GitHub release link above.
+          <strong>Security note:</strong> Signed with our release key and verified with <code>apksigner verify</code>. Same signature means smooth updates. Always download from the official GitHub link above — never from third-party mirrors.
         </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- License -->
+  <section id="license" class="license-section">
+    <div class="container">
+      <div class="license-card">
+        <h2 class="license-title">MIT License</h2>
+        <p class="license-text">Copyright (c) 2026 Nostu Wavzz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section id="contact" class="contact-section">
+    <div class="container">
+      <div class="section-header">
+        <p class="eyebrow">Get in touch</p>
+        <h2 class="section-title">Let's keep radio alive.</h2>
+        <p class="section-lead">
+          Got a broken station? A feature idea? Or just want to say hi? We're all ears.
+        </p>
+      </div>
+
+      <div class="contact-grid">
+        <div class="contact-card">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+          </div>
+          <h3 class="contact-name">GitHub</h3>
+          <p class="contact-detail">Report bugs, request features, or contribute to the project.</p>
+          <a href="https://github.com/sreyassanker" class="contact-link" target="_blank" rel="noopener">
+            View Repository
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+        </div>
+
+        <div class="contact-card">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </div>
+          <h3 class="contact-name">Email</h3>
+          <p class="contact-detail">cherthlabs@gmail.com — For partnerships, press inquiries, or general questions.</p>
+          <a href="mailto:cherthlabs@gmail.com" class="contact-link">
+            cherthlabs@gmail.com
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+          <a href="https://sreyassanker.vercel.app/" class="contact-link" target="_blank" rel="noopener" style="margin-top: 8px;">
+            Visit Website
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+        </div>
+
+        <div class="contact-card">
+          <div class="contact-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24" aria-hidden="true">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+            </svg>
+          </div>
+          <h3 class="contact-name">LinkedIn</h3>
+          <p class="contact-detail">Connect with the founder and follow project updates.</p>
+          <a href="https://www.linkedin.com/in/sreyassanker" class="contact-link" target="_blank" rel="noopener">
+            Connect on LinkedIn
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+        </div>
       </div>
     </div>
   </section>
@@ -631,24 +1003,77 @@
   <footer class="footer">
     <div class="container">
       <div class="footer-grid">
-        <a href="./" class="logo">
-          <span class="logo-slash">//</span> Wavz
-        </a>
+        <div>
+          <a href="./" class="footer-logo">Nostu Wavzz</a>
+        </div>
         <div class="footer-links">
-          <a href="https://github.com/sreyassanker/Wavz" class="footer-link" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://github.com/sreyassanker/Wavz/releases" class="footer-link" target="_blank" rel="noopener">Releases</a>
-          <a href="https://github.com/sreyassanker/Wavz/blob/main/LICENSE" class="footer-link" target="_blank" rel="noopener">MIT License</a>
+          <a href="https://github.com/sreyassanker" class="footer-link" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/sreyassanker/NostuWavzz/releases" class="footer-link" target="_blank" rel="noopener">Releases</a>
+          <a href="https://sreyassanker.vercel.app/" class="footer-link" target="_blank" rel="noopener">Website</a>
+          <a href="https://www.linkedin.com/in/sreyassanker" class="footer-link" target="_blank" rel="noopener">LinkedIn</a>
+          <a href="#license" class="footer-link">MIT License</a>
           <a href="https://www.radio-browser.info" class="footer-link" target="_blank" rel="noopener">Radio-Browser</a>
         </div>
       </div>
-      <p class="footer-copy">
-        Station metadata from the community-run <a href="https://www.radio-browser.info" class="footer-link" target="_blank" rel="noopener">radio-browser.info</a>.<br />
-        Streams are served directly by broadcasters; Wavz never proxies audio. © Wavz Project 2026.
-      </p>
+      <div class="footer-divider"></div>
+      <div class="footer-bottom">
+        <p class="footer-copy">
+          Station metadata from the community-run <a href="https://www.radio-browser.info" class="footer-link" target="_blank" rel="noopener">radio-browser.info</a>.<br />
+          Streams are served directly by broadcasters; Nostu Wavzz never proxies audio.
+        </p>
+        <p class="footer-copy">
+          &copy; 2026 Nostu Wavzz. All rights reserved.
+        </p>
+      </div>
     </div>
   </footer>
 
   <script src="./qrcode.js"></script>
+  <script>
+    // Smooth scroll for nav links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 50) {
+        nav.classList.add('scrolled');
+      } else {
+        nav.classList.remove('scrolled');
+      }
+    });
+
+    // Intersection Observer for fade-in animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, observerOptions);
+
+    // Observe feature cards and other elements
+    document.querySelectorAll('.feature-card, .stat-item, .contact-card, .install-step, .license-card').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  </script>
 
 </body>
 </html>

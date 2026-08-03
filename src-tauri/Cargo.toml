@@ -1,12 +1,12 @@
 [package]
-name = "wavz"
+name = "nostu_wavzz"
 version = "0.1.0"
-description = "Wavz — Global Internet Radio"
-authors = ["Wavz Team"]
+description = "Nostu Wavzz — Global Internet Radio"
+authors = ["Nostu Wavzz"]
 edition = "2021"
 
 [lib]
-name = "wavz_lib"
+name = "nostu_wavzz_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

@@ -55,7 +55,7 @@ export function normalizeStation(raw: RadioBrowserRawStation): Station {
 
 export async function fetchStationsDirect(): Promise<Station[]> {
   const response = await fetch(RADIO_BROWSER_URL, {
-    headers: { 'User-Agent': 'Wavz/2.0' },
+    headers: { 'User-Agent': 'NostuWavzz/2.0' },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data: RadioBrowserRawStation[] = await response.json();

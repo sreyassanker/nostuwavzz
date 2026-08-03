@@ -18,7 +18,7 @@ export default function Header({ onSync }: HeaderProps) {
     <header className="header">
       <div className="header-left">
         <a href="/" className="logo">
-          WAVZ<span className="logo-slash">//</span>
+          Nostu Wavzz
         </a>
         <span className="header-count">{totalCount.toLocaleString()} stations</span>
       </div>

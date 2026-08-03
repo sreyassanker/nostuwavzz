@@ -100,10 +100,7 @@ input, select {
   text-decoration: none;
 }
 
-.logo-slash {
-  color: var(--ink-mute);
-  margin-left: 2px;
-}
+
 
 .header-right {
   align-items: center;

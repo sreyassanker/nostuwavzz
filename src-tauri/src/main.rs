@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    wavz_lib::run()
+    nostu_wavzz_lib::run()
 }

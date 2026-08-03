@@ -156,7 +156,7 @@ async fn sync_all_stations(
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
-        .user_agent("Wavz/2.0 (Tauri; https://github.com/wavz-radio)")
+        .user_agent("NostuWavzz/2.0 (Tauri; https://github.com/nostu-wavzz)")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -755,7 +755,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
-            let db_path = app_dir.join("wavz.db");
+            let db_path = app_dir.join("nostu_wavzz.db");
 
             let conn = Connection::open(&db_path)
                 .expect("failed to open database");
