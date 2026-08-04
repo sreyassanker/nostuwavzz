@@ -176,13 +176,18 @@ export function getBitrateBucket(
 }
 
 export function getTopCountries(stations: Station[], limit = 30) {
-  const counts: Record<string, number> = {};
+  const byKey: Record<string, { country: string; code: string; count: number }> = {};
   for (const s of stations) {
-    const c = s.country?.trim() || 'Unknown';
-    counts[c] = (counts[c] || 0) + 1;
+    const name = s.country?.trim();
+    if (!name) continue;
+    const code = s.countrycode?.trim().toUpperCase() || '';
+    if (!code) continue;
+    const key = name.toLowerCase();
+    const entry = byKey[key] ?? (byKey[key] = { country: name, code, count: 0 });
+    entry.count++;
+    if (entry.code !== code) entry.code = code;
   }
-  return Object.entries(counts)
-    .map(([country, count]) => ({ country, count }))
+  return Object.values(byKey)
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
 }

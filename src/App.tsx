@@ -1,16 +1,23 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store/store';
 import { audioEngine } from './lib/audioEngine';
 import { fetchAllStations, TARGET_STATIONS, type FetchProgressCallback } from './lib/fetchStations';
 import { loadAllStations, saveStationsBatch, setLastSyncTime, getLastSyncTime } from './lib/stationCache';
-import { isInContinent as isInContinentShared } from './lib/api';
+import { filterStations } from './lib/filter';
+import { useMediaQuery } from './lib/useMediaQuery';
+import { useTheme } from './lib/useTheme';
 import type { Station } from './types';
 import Header from './components/Header';
-import GlobeView from './components/GlobeView';
 import StationGrid from './components/StationGrid';
 import PlayerBar from './components/PlayerBar';
 import SearchModal from './components/SearchModal';
 import ToastContainer from './components/Toast';
+import MobileTabBar from './components/MobileTabBar';
+import FullPlayer from './components/FullPlayer';
+import SettingsView from './components/SettingsView';
+
+const GlobeView = lazy(() => import('./components/GlobeView'));
 
 let worker: Worker | null = null;
 let filterId = 0;
@@ -62,10 +69,20 @@ export default function App() {
   const setSelectedContinent = useStore((s) => s.setSelectedContinent);
   const setSelectedTag = useStore((s) => s.setSelectedTag);
   const setSearchOpen = useStore((s) => s.setSearchOpen);
+  const activeTab = useStore((s) => s.activeTab);
+  const setPlayerOpen = useStore((s) => s.setPlayerOpen);
+
+  useTheme();
+  const isMobile = useMediaQuery('(max-width: 760px)');
 
   const workerRef = useRef<Worker | null>(null);
   const pendingFilterRef = useRef<number>(0);
   const workerStationsRef = useRef<Station[] | null>(null);
+
+  const favoriteStations = useMemo(
+    () => allStations.filter((s) => favoriteUuids.has(s.stationuuid)),
+    [allStations, favoriteUuids]
+  );
 
   // Boot: load from IndexedDB, then background fetch
   useEffect(() => {
@@ -81,7 +98,7 @@ export default function App() {
 
         const lastSync = await getLastSyncTime();
         const cacheBelowTarget = cached.length < TARGET_STATIONS * 0.9;
-        const needsRefresh = !lastSync || cacheBelowTarget || (Date.now() - new Date(lastSync).getTime()) > 3600000;
+        const needsRefresh = !lastSync || cacheBelowTarget || (Date.now() - new Date(lastSync).getTime()) > 86400000;
 
         if (needsRefresh) {
           setSyncState({ inProgress: true, phase: 'fetching' });
@@ -114,7 +131,7 @@ export default function App() {
               setAllStations(stations);
               setTotalStationCount(stations.length);
               setCurrentStations(stations);
-              setSyncState({ inProgress: false, phase: 'done' });
+              setSyncState({ inProgress: false, phase: 'done', lastSync: new Date().toISOString() });
               await setLastSyncTime();
               addToast(`${stations.length} stations synced`);
             }
@@ -125,7 +142,7 @@ export default function App() {
             }
           }
         } else if (cached.length > 0) {
-          setSyncState({ inProgress: false, phase: 'done' });
+          setSyncState({ inProgress: false, phase: 'done', lastSync: lastSync || null });
         }
 
         if (cached.length === 0 && totalStationCount === 0) {
@@ -158,7 +175,15 @@ export default function App() {
       pendingFilterRef.current = id;
 
       const doMainThreadFallback = () => {
-        const filtered = filterOnMainThread(stations, query, countryCode, tag, continent, showUnverified, favoritesOnly, favoriteUuids);
+        const filtered = filterStations(stations, {
+          query,
+          countryCode,
+          tag,
+          continent,
+          showUnverified,
+          favoritesOnly,
+          favoriteUuids,
+        });
         if (pendingFilterRef.current === id) {
           setCurrentStations(filtered);
         }
@@ -199,8 +224,8 @@ export default function App() {
         type: 'filter',
         stations: shouldSendStations ? stations : undefined,
         query,
-        country: countryCode !== 'All' ? countryCode : undefined,
-        tags: tag !== 'All' ? tag : undefined,
+        countryCode: countryCode !== 'All' ? countryCode : undefined,
+        tag: tag !== 'All' ? tag : undefined,
         continent: continent !== 'All' ? continent : undefined,
         favoritesOnly: favoritesOnly,
         favoriteUuids: Array.from(favoriteUuids),
@@ -239,7 +264,7 @@ export default function App() {
         const needsRefresh =
           !lastSync ||
           state.allStations.length < TARGET_STATIONS * 0.9 ||
-          (Date.now() - new Date(lastSync).getTime()) > 3600000;
+          (Date.now() - new Date(lastSync).getTime()) > 86400000;
         if (needsRefresh && state.allStations.length > 0 && !syncInProgress) {
           state.addToast('Network restored, refreshing stations...', 'info');
         }
@@ -281,7 +306,7 @@ export default function App() {
           setPlayer({ isPlaying: false });
         } else {
           try {
-            await audioEngine.play(url, station.stationuuid);
+            await audioEngine.play(url, station.stationuuid, station);
             setPlayer({ isPlaying: true });
           } catch {
             setPlayer({ isPlaying: false });
@@ -293,15 +318,16 @@ export default function App() {
 
       setActiveStationUuid(station.stationuuid);
       setPlayer({ currentStation: station, isPlaying: true });
+      if (isMobile) setPlayerOpen(true);
 
       try {
-        await audioEngine.play(url, station.stationuuid);
+        await audioEngine.play(url, station.stationuuid, station);
       } catch {
         setPlayer({ isPlaying: false });
         addToast('Failed to play station', 'error');
       }
     },
-    [currentStation]
+    [currentStation, isMobile]
   );
 
   const handlePrev = useCallback(() => {
@@ -323,6 +349,19 @@ export default function App() {
     const next = idx >= 0 ? (idx + 1) % stations.length : 0;
     handleStationClick(stations[next]);
   }, [currentStations, currentStation]);
+
+  // Media session next/prev callbacks (via refs to avoid stale closures)
+  const handlePrevRef = useRef(handlePrev);
+  const handleNextRef = useRef(handleNext);
+  handlePrevRef.current = handlePrev;
+  handleNextRef.current = handleNext;
+
+  useEffect(() => {
+    audioEngine.setCallbacks(
+      () => handleNextRef.current(),
+      () => handlePrevRef.current()
+    );
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -388,70 +427,108 @@ export default function App() {
   return (
     <div className="app-shell">
       <Header onSync={handleSync} />
-      <main className="main">
-        <section className="panel panel--grid" id="grid-panel">
-          <StationGrid
-            stations={currentStations}
-            onStationClick={handleStationClick}
-            onClearFilters={handleClearFilters}
-            onSync={handleSync}
-          />
-        </section>
-        <section className="panel panel--map" id="map-panel">
-          <GlobeView stations={currentStations.length > 0 ? currentStations : []} />
-        </section>
-      </main>
+      {isMobile ? (
+        <>
+          <main className="main main--mobile">
+            <AnimatePresence mode="wait">
+              {activeTab === 'discover' && (
+                <motion.section
+                  key="tab-discover"
+                  className="panel panel--grid"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <StationGrid
+                    stations={currentStations}
+                    onStationClick={handleStationClick}
+                    onClearFilters={handleClearFilters}
+                    onSync={handleSync}
+                  />
+                </motion.section>
+              )}
+              {activeTab === 'globe' && (
+                <motion.section
+                  key="tab-globe"
+                  className="panel panel--map"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Suspense fallback={<GlobeFallback />}>
+                    <GlobeView stations={currentStations} />
+                  </Suspense>
+                </motion.section>
+              )}
+              {activeTab === 'favorites' && (
+                <motion.section
+                  key="tab-favorites"
+                  className="panel panel--grid"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <StationGrid
+                    stations={favoriteStations}
+                    onStationClick={handleStationClick}
+                    onClearFilters={handleClearFilters}
+                    onSync={handleSync}
+                    titleOverride="Favorites"
+                    hideFilters
+                  />
+                </motion.section>
+              )}
+              {activeTab === 'settings' && (
+                <motion.section
+                  key="tab-settings"
+                  className="panel panel--grid panel--settings"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <SettingsView />
+                </motion.section>
+              )}
+            </AnimatePresence>
+          </main>
+          <MobileTabBar />
+        </>
+      ) : (
+        <main className="main">
+          <section className="panel panel--grid" id="grid-panel">
+            <StationGrid
+              stations={currentStations}
+              onStationClick={handleStationClick}
+              onClearFilters={handleClearFilters}
+              onSync={handleSync}
+            />
+          </section>
+          <section className="panel panel--map" id="map-panel">
+            <Suspense fallback={<GlobeFallback />}>
+              <GlobeView stations={currentStations.length > 0 ? currentStations : []} />
+            </Suspense>
+          </section>
+        </main>
+      )}
       <PlayerBar onPrev={handlePrev} onNext={handleNext} />
+      <FullPlayer onPrev={handlePrev} onNext={handleNext} />
       <SearchModal onSelect={handleStationClick} />
       <ToastContainer />
     </div>
   );
 }
 
-function filterOnMainThread(
-  stations: Station[],
-  query: string,
-  countryCode: string,
-  tag: string,
-  continent: string,
-  showUnverified?: boolean,
-  favoritesOnly?: boolean,
-  favoriteUuids?: Set<string>
-): Station[] {
-  let filtered = stations;
-
-  if (!showUnverified) {
-    filtered = filtered.filter((s) => s.validated !== false);
-  }
-
-  if (favoritesOnly) {
-    const favs = favoriteUuids || new Set<string>();
-    filtered = filtered.filter((s) => favs.has(s.stationuuid));
-  }
-
-  const q = query.toLowerCase().trim();
-
-  if (countryCode && countryCode !== 'All') {
-    filtered = filtered.filter((s) => s.countrycode === countryCode);
-  }
-  if (tag && tag !== 'All') {
-    const tl = tag.toLowerCase().trim();
-    filtered = filtered.filter((s) => {
-      if (!s.tags) return false;
-      const stationTags = s.tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
-      return stationTags.some((t) => t.includes(tl));
-    });
-  }
-  if (continent && continent !== 'All') {
-    filtered = filtered.filter((s) => isInContinentShared(s.geo_lat, s.geo_long, continent));
-  }
-  if (q) {
-    filtered = filtered.filter(
-      (s) =>
-        s.name?.toLowerCase().includes(q) ||
-        s.country?.toLowerCase().includes(q) ||
-        s.tags?.toLowerCase().includes(q)
-    );
-  }
-  return filtered;
+function GlobeFallback() {
+  return (
+    <div className="globe-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="empty-state">
+        <div className="loading-spinner" aria-hidden="true" />
+        <p className="empty-copy">Loading globe...</p>
+      </div>
+    </div>
+  );
 }

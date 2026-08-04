@@ -28,7 +28,7 @@
 
 Nostu Wavzz is a free, open-source internet radio player that brings back the nostalgia of radio — that feeling of tuning in to a distant city, discovering a new station, and letting the music carry you away.
 
-Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, lightweight (~10 MB installer), and cross-platform: **Windows, macOS, Linux, and Android**.
+Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, lightweight, and cross-platform: **Windows, macOS, Linux, and Android**.
 
 ---
 
@@ -36,15 +36,17 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 
 ### Discovery
 - **50,000+ stations** — full index sourced from the community-run [radio-browser.info](https://radio-browser.info) directory
-- **Interactive 3D Globe** — stations plotted by real coordinates; click a dot to listen instantly
+- **Interactive 3D Globe** — stations plotted by real coordinates; tap a dot to listen instantly
 - **Full-text search** — press `Ctrl+K` / `Cmd+K` anywhere, search by name, country, genre, or language
 - **Smart filters** — filter by continent, country, tag/genre, or favorites
 - **Top charts** — stations ordered by real click-count popularity
 
 ### Playback
 - Gapless **play / pause / next / previous** with a persistent player bar
+- **Lock-screen & notification controls** — native Android media notification with play/pause/next/previous, artwork, and hardware-button support
+- **Crossfade** — a smooth 1.2-second volume fade when switching stations
 - **Stall recovery** — automatically retries flaky streams (3 attempts) and reconnects
-- **Sleep timer** — auto-stop after 15 / 30 / 60 min
+- **Sleep timer** — auto-stop after 15 / 30 / 60 min, and it survives an app restart
 - Volume slider + mute
 - Resume your last station on launch
 
@@ -54,12 +56,14 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 - **Web Worker filtering** — search & filter run off the main thread; the UI never stutters, even with 50K rows
 - **Virtualized grid** — smooth scrolling through thousands of station cards
 - **Favicon cache** — station logos stored locally with 7-day TTL + LRU eviction
+- **Data saver mode** — skip station-logo downloads on cellular connections
+- **Light & dark themes** — follow your system, or pick manually
 - **Favorites** — one-tap heart, persisted across sessions
 
 ### Privacy
 - No accounts, no tracking, no ads
 - All data stays on your device
-- Streams connect directly to each station's server (HTTPS only)
+- Streams connect directly to each station's server — audio is never proxied
 
 ---
 
@@ -68,6 +72,7 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 | Layer | Technology |
 |---|---|
 | App shell | [Tauri v2](https://v2.tauri.app) (Rust + system WebView) |
+| Native media controls | `tauri-plugin-media-session` (Android/iOS lockscreen & notification) |
 | UI | [React 19](https://react.dev) + TypeScript (strict) |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com) + hand-tuned CSS variables |
 | 3D globe | [react-globe.gl](https://github.com/vasturiano/react-globe.gl) (Three.js / WebGL) |
@@ -94,23 +99,33 @@ NostuWavzz/
 │   ├── index.css              # Global styles (Tailwind + design tokens)
 │   │
 │   ├── components/
-│   │   ├── Header.tsx         # Logo, sync, favorites, on-air badge
+│   │   ├── Header.tsx         # Logo, sync status, favorites, theme toggle
 │   │   ├── FilterBar.tsx      # Search box, continent/tag chips, country select
 │   │   ├── StationGrid.tsx    # Virtualized card grid + progress bar
 │   │   ├── StationCard.tsx    # Single station card
+│   │   ├── StationLogo.tsx    # Lazy favicon with data-saver support
 │   │   ├── GlobeView.tsx      # 3D globe, tooltips, now-playing marker
 │   │   ├── PlayerBar.tsx      # Transport controls, volume, sleep timer
+│   │   ├── FullPlayer.tsx     # Mobile full-screen player
+│   │   ├── MobileTabBar.tsx   # Mobile bottom navigation
 │   │   ├── SearchModal.tsx    # ⌘K quick-search overlay
+│   │   ├── StationInfoModal.tsx  # Station detail dialog
+│   │   ├── SettingsView.tsx   # Settings (sleep timer, data saver, theme)
 │   │   └── Toast.tsx          # Notification toasts
 │   │
 │   ├── lib/
 │   │   ├── api.ts             # radio-browser.info client, normalizers, continent mapping
 │   │   ├── fetchStations.ts   # Batch downloader (4 mirrors, 1K/batch, ≤50K)
-│   │   ├── audioEngine.ts     # Custom audio engine w/ stall recovery & reconnect
+│   │   ├── filter.ts          # Shared filter logic (used by worker + main thread)
+│   │   ├── audioEngine.ts     # Custom audio engine: crossfade, stall recovery, media session
+│   │   ├── mediaSession.ts    # Native Android media-session bridge (tauri-plugin)
 │   │   ├── stationCache.ts    # IndexedDB station persistence
 │   │   ├── imageCache.ts      # IndexedDB favicon cache (LRU, 7-day TTL)
 │   │   ├── storage.ts         # localStorage helpers (favorites, last-played)
 │   │   ├── tauriApi.ts        # Tauri IPC wrapper + browser fallback
+│   │   ├── useSleepTimer.ts   # Sleep timer hook (survives restarts)
+│   │   ├── useTheme.ts        # Light/dark theme hook
+│   │   ├── useMediaQuery.ts   # Responsive media-query hook
 │   │   └── utils.ts           # escapeHtml, flags, highlight helpers
 │   │
 │   ├── store/store.ts         # Zustand global store
@@ -192,14 +207,18 @@ npm run tauri android init
 Build APK:
 
 ```bash
-# Debug
-npm run tauri android build -- --apk
-
-# Release
-npm run tauri android build -- --apk --release
+# Release APK (arm64), signed with the release keystore
+npx tauri android build --target aarch64
 ```
 
+The signed APK lands in `src-tauri/gen/android/app/build/outputs/apk/universal/release/`.
+
 > **Target SDK:** 36 (Android 16) | **Min SDK:** 24 (Android 7.0)
+>
+> **Notes:**
+> - Windows requires Developer Mode enabled for the symlink step during Android builds.
+> - The release build allows cleartext (`http://`) audio, since many radio streams aren't HTTPS yet.
+> - Android 13+ will ask for notification permission on first play — this powers the lock-screen media controls.
 
 ---
 

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { useStore } from '../store/store';
-import { getTopCountries, getTopTags, countryNameToCode } from '../lib/api';
+import { getTopCountries, getTopTags } from '../lib/api';
 import type { Station } from '../types';
 
 const CONTINENTS = [
@@ -34,8 +34,8 @@ export default function FilterBar() {
   const setSelectedContinent = useStore((s) => s.setSelectedContinent);
   const selectedTag = useStore((s) => s.selectedTag);
   const setSelectedTag = useStore((s) => s.setSelectedTag);
-  const selectedCountry = useStore((s) => s.selectedCountry);
   const setSelectedCountry = useStore((s) => s.setSelectedCountry);
+  const selectedCountryCode = useStore((s) => s.selectedCountryCode);
   const setSelectedCountryCode = useStore((s) => s.setSelectedCountryCode);
 
   const countries = useMemo(() => getTopCountries(stableStations, 60), [stableStations]);
@@ -44,13 +44,13 @@ export default function FilterBar() {
 
   const isLoading = allStations.length === 0;
 
-  const handleCountryChange = (name: string) => {
-    setSelectedCountry(name);
-    if (name === 'All') {
-      setSelectedCountryCode('All');
+  const handleCountryChange = (code: string) => {
+    setSelectedCountryCode(code);
+    if (code === 'All') {
+      setSelectedCountry('All');
     } else {
-      const code = countryNameToCode(name, allStations);
-      setSelectedCountryCode(code);
+      const match = countries.find((c) => c.code === code);
+      setSelectedCountry(match?.country ?? code);
     }
   };
 
@@ -68,13 +68,13 @@ export default function FilterBar() {
         />
         <select
           className="country-select"
-          value={selectedCountry}
+          value={selectedCountryCode}
           onChange={(e) => handleCountryChange(e.target.value)}
           aria-label="Filter by country"
         >
           <option value="All">All countries</option>
-          {countries.map(({ country, count }) => (
-            <option key={country} value={country}>
+          {countries.map(({ country, code, count }) => (
+            <option key={code} value={code}>
               {country} ({count})
             </option>
           ))}

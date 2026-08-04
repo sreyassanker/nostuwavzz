@@ -749,6 +749,7 @@ fn setup_background_sync(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_media_session::init())
         .setup(|app| {
             let app_dir = app
                 .path()

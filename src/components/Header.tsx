@@ -5,6 +5,18 @@ interface HeaderProps {
   onSync: () => void;
 }
 
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 export default function Header({ onSync }: HeaderProps) {
   const favorites = useStore((s) => s.favoriteUuids);
   const favoritesOnly = useStore((s) => s.favoritesOnly);
@@ -14,6 +26,8 @@ export default function Header({ onSync }: HeaderProps) {
   const syncState = useStore((s) => s.sync);
   const totalCount = useStore((s) => s.totalStationCount);
 
+  const lastSyncAgo = timeAgo(syncState.lastSync);
+
   return (
     <header className="header">
       <div className="header-left">
@@ -21,6 +35,9 @@ export default function Header({ onSync }: HeaderProps) {
           Nostu Wavzz
         </a>
         <span className="header-count">{totalCount.toLocaleString()} stations</span>
+        {lastSyncAgo && !syncState.inProgress && (
+          <span className="header-sync-label">synced {lastSyncAgo}</span>
+        )}
       </div>
       <div className="header-right">
         {syncState.inProgress && (

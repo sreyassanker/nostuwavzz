@@ -1,6 +1,6 @@
-# Nostu Wavzz v0.1.0
+# Nostu Wavzz v0.2.0
 
-**First public release of Nostu Wavzz** — global internet radio player with an interactive 3D globe.
+**Second public release of Nostu Wavzz** — global internet radio player with an interactive 3D globe.
 
 **50,000+ live stations** | **No account, no ads, no tracking** | **MIT licensed**
 
@@ -10,14 +10,26 @@
 
 | Platform | File | Size |
 |---|---|---|
-| **Android 7.0+** (arm64) | [nostu-wavzz-v0.1.0-arm64.apk](./nostu-wavzz-v0.1.0-arm64.apk) | 17.8 MB |
+| **Android 7.0+** (arm64) | [nostu-wavzz-v0.2.0.apk](./nostu-wavzz-v0.2.0.apk) | 18 MB |
 
 ### Install on Android
 1. Download the APK above.
 2. On your phone, open the file → Allow "Install from unknown sources" → Install.
 3. First launch will sync the 50K-station catalog in seconds.
 
+> **Note:** Uninstall any older version first — the signing key changed between v0.1.0 and v0.2.0.
+
 ---
+
+## What's new in v0.2.0
+
+- **Lock-screen & notification controls** — native Android media notification with play/pause/next/previous, station artwork, and hardware-button support (`tauri-plugin-media-session`)
+- **Crossfade** — a smooth 1.2-second volume fade when switching stations
+- **Sleep timer survives restarts** — the countdown is restored if you relaunch the app
+- **Faster globe** — texture-based rendering with smart point subsampling, zero lag with 50K stations
+- **Fixed playback on release builds** — cleartext (`http://`) radio streams now play on Android
+- **Data saver mode** — skip station-logo downloads on cellular connections
+- **Light & dark themes** — follow your system, or pick manually
 
 ## What's inside
 
@@ -42,9 +54,10 @@
 | 3D globe | react-globe.gl (Three.js/WebGL) |
 | State | Zustand |
 | Offline DB | SQLite via rusqlite (FTS5 full-text search) |
+| Native media controls | tauri-plugin-media-session |
 | Async runtime | Tokio |
 | Android | Tauri v2 → APK, arm64 |
-| Audio | Custom stall-recovery engine |
+| Audio | Custom engine with crossfade + stall recovery |
 
 ```bash
 # Run in browser
@@ -56,8 +69,8 @@ npm run tauri dev
 # Desktop build
 npm run tauri build
 
-# Android APK (see README for full prerequisites)
-npm run tauri android build -- --apk
+# Android release APK (see README for prerequisites)
+npx tauri android build --target aarch64
 ```
 
 ---
@@ -66,11 +79,11 @@ npm run tauri android build -- --apk
 
 | | |
 |---|---|
-| **APK SHA-256** | `35A703B85C8DDB2A6A12A9E2C7C73F61F28FD25B0769AECCF3A60ED4ABA3F1A6` |
+| **APK SHA-256** | `0FC8B709ADE478CFF5796C60B570FF78D638662D0FEA68254C34C5D8FE59CEC7` |
 | **Min SDK** | 24 (Android 7.0) |
 | **Target SDK** | 36 (Android 16) |
 | **ABIs** | `arm64-v8a` |
-| **Permissions** | INTERNET, FOREGROUND_SERVICE, ACCESS_NETWORK_STATE |
+| **Permissions** | INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, WAKE_LOCK |
 
 > **Security note:** APK is self-signed with our release key (RSA-2048, SHA-256). Verify the fingerprint above matches after download. Never sideload from mirror sites.
 

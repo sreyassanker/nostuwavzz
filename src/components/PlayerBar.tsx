@@ -1,9 +1,10 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
-import { Heart, Play, SkipBack, SkipForward, Square, Timer, Volume2, Radio } from 'lucide-react';
+import { Heart, Play, SkipBack, SkipForward, Square, Timer, Volume2, Radio, ChevronUp } from 'lucide-react';
 import { useStore } from '../store/store';
 import { audioEngine } from '../lib/audioEngine';
 import { toggleFavorite as storageToggleFavorite } from '../lib/storage';
 import { countryCodeToFlag } from '../lib/utils';
+import { useSleepTimer } from '../lib/useSleepTimer';
 
 const VOLUME_KEY = 'radio.volume';
 
@@ -18,14 +19,14 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
   const player = useStore((s) => s.player);
   const setPlayer = useStore((s) => s.setPlayer);
   const sleepTimerMinutes = useStore((s) => s.sleepTimerMinutes);
-  const setSleepTimer = useStore((s) => s.setSleepTimer);
   const addToast = useStore((s) => s.addToast);
   const favoriteUuids = useStore((s) => s.favoriteUuids);
   const setFavoriteUuids = useStore((s) => s.setFavoriteUuids);
+  const setPlayerOpen = useStore((s) => s.setPlayerOpen);
 
-  const sleepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
   const sleepMenuRef = useRef<HTMLDivElement>(null);
+  const { handleSleep } = useSleepTimer();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -58,7 +59,7 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
     } else if (player.currentStation) {
       const url = player.currentStation.url_resolved || player.currentStation.url;
       if (url) {
-        audioEngine.play(url, player.currentStation.stationuuid).catch(() => {
+        audioEngine.play(url, player.currentStation.stationuuid, player.currentStation).catch(() => {
           setPlayer({ isPlaying: false });
           addToast('Failed to play station', 'error');
         });
@@ -91,23 +92,12 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
     setFavoriteUuids(newFavs);
   }, [player.currentStation, favoriteUuids, setFavoriteUuids, addToast]);
 
-  const handleSleep = useCallback(
+  const handleSleepWrapper = useCallback(
     (mins: number) => {
-      if (sleepRef.current) clearTimeout(sleepRef.current);
-      if (mins > 0) {
-        sleepRef.current = setTimeout(() => {
-          audioEngine.stop();
-          setPlayer({ isPlaying: false });
-          addToast('Sleep timer ended');
-        }, mins * 60000);
-        addToast(`Sleep timer: ${mins} min`);
-      } else {
-        addToast('Sleep timer off');
-      }
-      setSleepTimer(mins);
+      handleSleep(mins);
       setSleepOpen(false);
     },
-    [setPlayer, setSleepTimer, addToast]
+    [handleSleep]
   );
 
   const station = player.currentStation;
@@ -121,7 +111,19 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
 
   return (
     <footer className="player-bar" id="player-bar">
-      <div className="player-left">
+      <div
+        className="player-left"
+        role="button"
+        tabIndex={0}
+        onClick={() => setPlayerOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setPlayerOpen(true);
+          }
+        }}
+        aria-label={station ? `Open player for ${station.name}` : 'Open player'}
+      >
         <div className={`player-flag ${!station ? 'player-flag--empty' : ''}`} id="player-flag">
           {station ? flag || '📻' : <Radio size={18} strokeWidth={1.8} aria-hidden="true" />}
         </div>
@@ -135,6 +137,7 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
             </div>
           )}
         </div>
+        <ChevronUp className="player-expand" size={16} strokeWidth={1.8} aria-hidden="true" />
       </div>
       <div className="player-center">
         <button type="button" className="player-btn" onClick={onPrev} title="Previous station" aria-label="Previous station">
@@ -196,7 +199,7 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
               <button
                 type="button"
                 key={m}
-                onClick={() => handleSleep(m)}
+                onClick={() => handleSleepWrapper(m)}
                 style={{
                   background: sleepTimerMinutes === m ? 'var(--bg)' : 'transparent',
                   fontWeight: sleepTimerMinutes === m ? 600 : 400,
@@ -207,7 +210,7 @@ export default function PlayerBar({ onPrev, onNext }: PlayerBarProps) {
             ))}
             <button
               type="button"
-              onClick={() => handleSleep(0)}
+              onClick={() => handleSleepWrapper(0)}
               style={{
                 background: sleepTimerMinutes === 0 ? 'var(--bg)' : 'transparent',
                 color: 'var(--ink-mute)',

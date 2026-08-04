@@ -21,6 +21,9 @@ interface SyncState {
   lastSync: string | null;
 }
 
+export type ActiveTab = 'discover' | 'globe' | 'favorites' | 'settings';
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 interface AppState {
   allStations: Station[];
   currentStations: Station[];
@@ -29,6 +32,7 @@ interface AppState {
   favoritesOnly: boolean;
   activeStationUuid: string | null;
   sleepTimerMinutes: number;
+  sleepTimerTarget: number | null;
   toasts: Toast[];
   player: PlayerState;
   searchOpen: boolean;
@@ -40,6 +44,11 @@ interface AppState {
   selectedCountry: string;
   selectedCountryCode: string;
   showUnverified: boolean;
+
+  activeTab: ActiveTab;
+  theme: ThemeMode;
+  playerOpen: boolean;
+  dataSaver: boolean;
 
   setAllStations: (stations: Station[]) => void;
   setCurrentStations: (stations: Station[]) => void;
@@ -59,9 +68,28 @@ interface AppState {
   setSelectedCountryCode: (c: string) => void;
   setShowUnverified: (v: boolean) => void;
   setSyncState: (s: Partial<SyncState>) => void;
+  setActiveTab: (t: ActiveTab) => void;
+  setTheme: (t: ThemeMode) => void;
+  setPlayerOpen: (v: boolean) => void;
+  setDataSaver: (v: boolean) => void;
 }
 
 let toastCounter = 0;
+
+function loadTheme(): ThemeMode {
+  try {
+    const saved = localStorage.getItem('radio.theme');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+  } catch {}
+  return 'system';
+}
+
+function loadDataSaver(): boolean {
+  try {
+    return localStorage.getItem('radio.dataSaver') === '1';
+  } catch {}
+  return false;
+}
 
 function loadSleepTimer(): number {
   try {
@@ -74,6 +102,25 @@ function loadSleepTimer(): number {
   return 0;
 }
 
+function loadSleepTimerTarget(): number | null {
+  try {
+    const saved = localStorage.getItem('radio.sleepTimerTarget');
+    if (saved) {
+      const v = parseInt(saved, 10);
+      if (!isNaN(v)) {
+        const remaining = Math.floor((v - Date.now()) / 60000);
+        if (remaining <= 0) {
+          localStorage.removeItem('radio.sleepTimer');
+          localStorage.removeItem('radio.sleepTimerTarget');
+          return null;
+        }
+        return v;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export const useStore = create<AppState>((set) => ({
   allStations: [],
   currentStations: [],
@@ -82,6 +129,7 @@ export const useStore = create<AppState>((set) => ({
   favoritesOnly: false,
   activeStationUuid: null,
   sleepTimerMinutes: loadSleepTimer(),
+  sleepTimerTarget: loadSleepTimerTarget(),
   toasts: [],
   player: { currentStation: null, isPlaying: false, volume: 0.8 },
   searchOpen: false,
@@ -92,6 +140,10 @@ export const useStore = create<AppState>((set) => ({
   selectedCountry: 'All',
   selectedCountryCode: 'All',
   showUnverified: false,
+  activeTab: 'discover',
+  theme: loadTheme(),
+  playerOpen: false,
+  dataSaver: loadDataSaver(),
 
   setAllStations: (stations) => set({ allStations: stations }),
   setCurrentStations: (stations) => set({ currentStations: stations }),
@@ -101,7 +153,14 @@ export const useStore = create<AppState>((set) => ({
   setActiveStationUuid: (uuid) => set({ activeStationUuid: uuid }),
   setSleepTimer: (mins) => {
     set({ sleepTimerMinutes: mins });
-    try { localStorage.setItem('radio.sleepTimer', String(mins)); } catch {}
+    try {
+      localStorage.setItem('radio.sleepTimer', String(mins));
+      if (mins > 0) {
+        localStorage.setItem('radio.sleepTimerTarget', String(Date.now() + mins * 60000));
+      } else {
+        localStorage.removeItem('radio.sleepTimerTarget');
+      }
+    } catch {}
   },
   addToast: (message, type = 'info') => {
     const id = `toast-${++toastCounter}`;
@@ -120,4 +179,14 @@ export const useStore = create<AppState>((set) => ({
   setSelectedCountryCode: (selectedCountryCode) => set({ selectedCountryCode }),
   setShowUnverified: (showUnverified) => set({ showUnverified }),
   setSyncState: (s) => set((state) => ({ sync: { ...state.sync, ...s } })),
+  setActiveTab: (activeTab) => set({ activeTab }),
+  setTheme: (theme) => {
+    set({ theme });
+    try { localStorage.setItem('radio.theme', theme); } catch {}
+  },
+  setPlayerOpen: (playerOpen) => set({ playerOpen }),
+  setDataSaver: (dataSaver) => {
+    set({ dataSaver });
+    try { localStorage.setItem('radio.dataSaver', dataSaver ? '1' : '0'); } catch {}
+  },
 }));

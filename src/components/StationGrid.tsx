@@ -4,16 +4,18 @@ import type { Station } from '../types';
 import StationCard from './StationCard';
 import FilterBar from './FilterBar';
 import { useStore } from '../store/store';
-import { Loader2, Radio, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Radio, SlidersHorizontal, Heart } from 'lucide-react';
 
 interface StationGridProps {
   stations: Station[];
   onStationClick: (station: Station) => void;
   onClearFilters: () => void;
   onSync: () => void;
+  titleOverride?: string;
+  hideFilters?: boolean;
 }
 
-export default function StationGrid({ stations, onStationClick, onClearFilters, onSync }: StationGridProps) {
+export default function StationGrid({ stations, onStationClick, onClearFilters, onSync, titleOverride, hideFilters }: StationGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const totalStationCount = useStore((s) => s.totalStationCount);
   const favoritesOnly = useStore((s) => s.favoritesOnly);
@@ -29,7 +31,8 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
       selectedTag !== 'All' ||
       selectedCountry !== 'All'
   );
-  const title = favoritesOnly ? 'Favorites' : hasFilters ? 'Filtered Stations' : 'All Stations';
+  const title = titleOverride ?? (favoritesOnly ? 'Favorites' : hasFilters ? 'Filtered Stations' : 'All Stations');
+  const isFavoritesView = titleOverride === 'Favorites' || favoritesOnly;
   const initialSync = syncState.inProgress && totalStationCount === 0 && stations.length === 0;
   const COLUMNS = 3;
   const ROW_HEIGHT = 116;
@@ -56,7 +59,7 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
             {stations.length} station{stations.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <FilterBar />
+        {!hideFilters && <FilterBar />}
       </div>
       {syncState.inProgress && syncState.phase === 'fetching' && (
         <div className="sync-progress-bar">
@@ -91,13 +94,21 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
           </button>
         </div>
       ) : stations.length === 0 ? (
-        <div className="empty-state">
-          <SlidersHorizontal className="empty-icon" size={28} strokeWidth={1.8} aria-hidden="true" />
-          <p className="empty-title">No stations match your filters.</p>
-          <button type="button" className="btn-clear" onClick={onClearFilters}>
-            Clear filters
-          </button>
-        </div>
+        isFavoritesView ? (
+          <div className="empty-state">
+            <Heart className="empty-icon" size={28} strokeWidth={1.8} aria-hidden="true" />
+            <p className="empty-title">No favorites yet.</p>
+            <p className="empty-copy">Tap the heart on any station to save it here.</p>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <SlidersHorizontal className="empty-icon" size={28} strokeWidth={1.8} aria-hidden="true" />
+            <p className="empty-title">No stations match your filters.</p>
+            <button type="button" className="btn-clear" onClick={onClearFilters}>
+              Clear filters
+            </button>
+          </div>
+        )
       ) : (
         <div className="station-grid station-grid--virtual" ref={scrollRef}>
           <div
