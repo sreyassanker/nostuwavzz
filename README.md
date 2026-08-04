@@ -42,11 +42,14 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 - **Top charts** — stations ordered by real click-count popularity
 
 ### Playback
-- Gapless **play / pause / next / previous** with a persistent player bar
+- **Bottom-sheet player** — a persistent mini pill that expands into a full player; swipe left/right to skip between stations, spin the artwork ring while playing
 - **Lock-screen & notification controls** — native Android media notification with play/pause/next/previous, artwork, and hardware-button support
-- **Crossfade** — a smooth 1.2-second volume fade when switching stations
+- **Audio focus** — playback pauses automatically when a call or another app takes audio, and resumes when you regain focus
+- **Auto-resume on reconnect** — plug your headphones or reconnect your Bluetooth earbuds and playback picks right back up
+- **Crossfade** — optional smooth volume crossfade (0.5–3s, adjustable) when switching stations
 - **Stall recovery** — automatically retries flaky streams (3 attempts) and reconnects
-- **Sleep timer** — auto-stop after 15 / 30 / 60 min, and it survives an app restart
+- **Buffering indicator** — an inline "Buffering…" banner appears in the player when a stream stalls
+- **Sleep timer** — 15 / 30 / 60 / 90 min, gently fades the volume out before stopping, and survives an app restart
 - Volume slider + mute
 - Resume your last station on launch
 
@@ -57,8 +60,15 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 - **Virtualized grid** — smooth scrolling through thousands of station cards
 - **Favicon cache** — station logos stored locally with 7-day TTL + LRU eviction
 - **Data saver mode** — skip station-logo downloads on cellular connections
-- **Light & dark themes** — follow your system, or pick manually
 - **Favorites** — one-tap heart, persisted across sessions
+
+### Experience & Polish
+- **Dynamic accent from station art** — the app colors itself with the dominant color of the currently playing station's artwork
+- **Pure black (AMOLED) mode** — deep-black backgrounds for OLED screens in dark mode
+- **Recently played** — a one-tap row of your latest stations right on the home screen
+- **Shimmer skeletons** — smooth loading placeholders while the station catalog syncs
+- **Searchable settings** — find any setting instantly; grouped list-cards with a compact / normal / cozy density scale
+- **Light & dark themes** — follow your system, or pick manually
 
 ### Privacy
 - No accounts, no tracking, no ads
@@ -101,30 +111,31 @@ NostuWavzz/
 │   ├── components/
 │   │   ├── Header.tsx         # Logo, sync status, favorites, theme toggle
 │   │   ├── FilterBar.tsx      # Search box, continent/tag chips, country select
-│   │   ├── StationGrid.tsx    # Virtualized card grid + progress bar
+│   │   ├── StationGrid.tsx    # Virtualized card grid + skeleton loading
 │   │   ├── StationCard.tsx    # Single station card
+│   │   ├── RecentRow.tsx      # "Recently played" home row
 │   │   ├── StationLogo.tsx    # Lazy favicon with data-saver support
 │   │   ├── GlobeView.tsx      # 3D globe, tooltips, now-playing marker
-│   │   ├── PlayerBar.tsx      # Transport controls, volume, sleep timer
-│   │   ├── FullPlayer.tsx     # Mobile full-screen player
+│   │   ├── PlayerSheet.tsx    # Bottom-sheet player: mini pill + full player, swipe-to-switch
 │   │   ├── MobileTabBar.tsx   # Mobile bottom navigation
 │   │   ├── SearchModal.tsx    # ⌘K quick-search overlay
 │   │   ├── StationInfoModal.tsx  # Station detail dialog
-│   │   ├── SettingsView.tsx   # Settings (sleep timer, data saver, theme)
+│   │   ├── SettingsView.tsx   # Searchable settings (theme, density, crossfade, data)
 │   │   └── Toast.tsx          # Notification toasts
 │   │
 │   ├── lib/
 │   │   ├── api.ts             # radio-browser.info client, normalizers, continent mapping
 │   │   ├── fetchStations.ts   # Batch downloader (4 mirrors, 1K/batch, ≤50K)
 │   │   ├── filter.ts          # Shared filter logic (used by worker + main thread)
-│   │   ├── audioEngine.ts     # Custom audio engine: crossfade, stall recovery, media session
+│   │   ├── audioEngine.ts     # Audio engine: configurable crossfade, fade-out, stall recovery, media session
 │   │   ├── mediaSession.ts    # Native Android media-session bridge (tauri-plugin)
+│   │   ├── colorExtract.ts    # Dominant-color extraction from station artwork (accent theme)
 │   │   ├── stationCache.ts    # IndexedDB station persistence
 │   │   ├── imageCache.ts      # IndexedDB favicon cache (LRU, 7-day TTL)
 │   │   ├── storage.ts         # localStorage helpers (favorites, last-played)
 │   │   ├── tauriApi.ts        # Tauri IPC wrapper + browser fallback
-│   │   ├── useSleepTimer.ts   # Sleep timer hook (survives restarts)
-│   │   ├── useTheme.ts        # Light/dark theme hook
+│   │   ├── useSleepTimer.ts   # Sleep timer hook (fades out, survives restarts)
+│   │   ├── useTheme.ts        # Light/dark/accent theme hook
 │   │   ├── useMediaQuery.ts   # Responsive media-query hook
 │   │   └── utils.ts           # escapeHtml, flags, highlight helpers
 │   │
@@ -219,6 +230,7 @@ The signed APK lands in `src-tauri/gen/android/app/build/outputs/apk/universal/r
 > - Windows requires Developer Mode enabled for the symlink step during Android builds.
 > - The release build allows cleartext (`http://`) audio, since many radio streams aren't HTTPS yet.
 > - Android 13+ will ask for notification permission on first play — this powers the lock-screen media controls.
+> - `tauri-plugin-media-session` is patched (in the Cargo registry copy, pinned to 0.2.4) to auto-resume playback when Bluetooth or headphones reconnect.
 
 ---
 

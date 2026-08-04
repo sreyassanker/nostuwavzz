@@ -4,16 +4,17 @@ import * as THREE from 'three';
 import { useStore } from '../store/store';
 import { audioEngine } from '../lib/audioEngine';
 import { countryCodeToFlag } from '../lib/utils';
+import { hexToRgba } from '../lib/colorExtract';
 import StationInfoModal from './StationInfoModal';
 import type { Station } from '../types';
 
 const CONTINENT_COLORS: Record<string, string> = {
-  'N. America': '#EDA100',
-  'S. America': '#E0683C',
-  'Europe': '#6396D6',
-  'Africa': '#6EA100',
-  'Asia': '#C8553D',
-  'Oceania': '#8E7CC3',
+  'N. America': '#3aa6ff',
+  'S. America': '#2fd98a',
+  'Europe': '#8f7bff',
+  'Africa': '#ffc53d',
+  'Asia': '#ff8a3d',
+  'Oceania': '#00c9b8',
 };
 
 const COUNTRY_COORDS: Record<string, [number, number, number?]> = {
@@ -172,7 +173,7 @@ function buildSubsampledPoints(stations: Station[]): PointDatum[] {
         lng,
         station: s,
         continent,
-        baseColor: CONTINENT_COLORS[continent] || '#9d9a8f',
+        baseColor: CONTINENT_COLORS[continent] || '#9aa0a6',
       });
     }
     return result;
@@ -192,7 +193,7 @@ function buildSubsampledPoints(stations: Station[]): PointDatum[] {
         lng,
         station: s,
         continent,
-        baseColor: CONTINENT_COLORS[continent] || '#9d9a8f',
+        baseColor: CONTINENT_COLORS[continent] || '#9aa0a6',
       };
     }
   }
@@ -214,7 +215,9 @@ const GlobeView = memo(function GlobeView({ stations }: GlobeViewProps) {
 
   const activeStationUuid = useStore((s) => s.activeStationUuid);
   const playerStation = useStore((s) => s.player.currentStation);
+  const accentColor = useStore((s) => s.accentColor);
   const setPlayer = useStore((s) => s.setPlayer);
+  const addRecentStation = useStore((s) => s.addRecentStation);
   const addToast = useStore((s) => s.addToast);
   const setActiveStationUuid = useStore((s) => s.setActiveStationUuid);
 
@@ -247,9 +250,9 @@ const GlobeView = memo(function GlobeView({ stations }: GlobeViewProps) {
   const pointColor = useCallback(
     (point: object) => {
       const p = point as PointDatum;
-      return p.station.stationuuid === activeUuidRef.current ? '#ff4d6d' : p.baseColor;
+      return p.station.stationuuid === activeUuidRef.current ? accentColor : p.baseColor;
     },
-    []
+    [accentColor]
   );
 
   const handlePlayStation = useCallback(
@@ -260,12 +263,13 @@ const GlobeView = memo(function GlobeView({ stations }: GlobeViewProps) {
       setPlayer({ currentStation: station, isPlaying: true });
       try {
         await audioEngine.play(url, station.stationuuid, station);
+        addRecentStation(station);
       } catch {
         setPlayer({ isPlaying: false });
         addToast('Failed to play station', 'error');
       }
     },
-    [setActiveStationUuid, setPlayer, addToast]
+    [setActiveStationUuid, setPlayer, addToast, addRecentStation]
   );
 
   const getGlobeHit = useCallback((e: React.MouseEvent) => {
@@ -388,13 +392,13 @@ const GlobeView = memo(function GlobeView({ stations }: GlobeViewProps) {
       {
         lat: coords.lat,
         lng: coords.lng,
-        color: 'rgba(255,77,109,0.85)',
+        color: hexToRgba(accentColor, 0.85),
         maxRadius: 9,
         speed: 2,
         repeatPeriod: 700,
       },
     ];
-  }, [playerStation]);
+  }, [playerStation, accentColor]);
 
   const activeMarker = useMemo(() => {
     if (!playerStation) return null;

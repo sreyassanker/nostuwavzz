@@ -23,13 +23,19 @@
 
 ## What's new in v0.2.0
 
+- **Bottom-sheet player** — persistent mini pill that expands into a full player; swipe left/right to switch stations
 - **Lock-screen & notification controls** — native Android media notification with play/pause/next/previous, station artwork, and hardware-button support (`tauri-plugin-media-session`)
-- **Crossfade** — a smooth 1.2-second volume fade when switching stations
-- **Sleep timer survives restarts** — the countdown is restored if you relaunch the app
+- **Audio focus + auto-resume** — pauses when a call or other app takes audio; resumes when you reconnect Bluetooth or headphones
+- **Dynamic accent from station art** — the app tints itself with the artwork of the currently playing station
+- **Pure black (AMOLED) mode** — deep-black backgrounds in dark mode
+- **Recently played row** — one-tap access to your latest stations
+- **Searchable settings** — find any setting instantly, with compact/normal/cozy density
+- **Crossfade (adjustable)** — optional smooth fade between stations, 0.5–3s, on by default
+- **Sleep timer fades out** — gently lowers the volume before stopping; countdown survives restarts
+- **Buffering indicator** — inline banner while a stream stalls
 - **Faster globe** — texture-based rendering with smart point subsampling, zero lag with 50K stations
 - **Fixed playback on release builds** — cleartext (`http://`) radio streams now play on Android
 - **Data saver mode** — skip station-logo downloads on cellular connections
-- **Light & dark themes** — follow your system, or pick manually
 
 ## What's inside
 
@@ -38,8 +44,8 @@
 - **Full-text search (⌘K)** — find any station in < 50 ms
 - **Offline-first** — SQLite FTS5 catalog cached locally, works offline
 - **Smart stall recovery** — auto-retries up to 3 times, reconnects silently
-- **Sleep timer** — auto-stop after 15 / 30 / 60 min
-- **Prev/next + volume slider**
+- **Sleep timer** — auto-stop after 15 / 30 / 60 min, with a gentle fade-out
+- **Bottom-sheet player** — swipe to switch stations, volume slider, sleep timer
 - **6 continental filters** — North America, South America, Europe, Africa, Asia Pacific, Middle East
 - **188 countries, 100+ languages**
 
@@ -79,7 +85,7 @@ npx tauri android build --target aarch64
 
 | | |
 |---|---|
-| **APK SHA-256** | `0FC8B709ADE478CFF5796C60B570FF78D638662D0FEA68254C34C5D8FE59CEC7` |
+| **APK SHA-256** | `58F1D03DF8AB948B4C1F5C183D31CBA4EA8AA684D9E2EAF4692E0D910D1740B1` |
 | **Min SDK** | 24 (Android 7.0) |
 | **Target SDK** | 36 (Android 16) |
 | **ABIs** | `arm64-v8a` |

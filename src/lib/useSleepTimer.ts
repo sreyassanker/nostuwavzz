@@ -8,14 +8,21 @@ export function useSleepTimer() {
   const addToast = useStore((s) => s.addToast);
   const sleepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const finishSleep = useCallback(async () => {
+    if (audioEngine.isPlaying()) {
+      await audioEngine.fadeOut(4000);
+    }
+    audioEngine.stop();
+    setPlayer({ isPlaying: false });
+    addToast('Sleep timer ended');
+  }, [setPlayer, addToast]);
+
   const handleSleep = useCallback(
     (mins: number) => {
       if (sleepRef.current) clearTimeout(sleepRef.current);
       if (mins > 0) {
         sleepRef.current = setTimeout(() => {
-          audioEngine.stop();
-          setPlayer({ isPlaying: false });
-          addToast('Sleep timer ended');
+          void finishSleep();
         }, mins * 60000);
         addToast(`Sleep timer: ${mins} min`);
       } else {
@@ -23,7 +30,7 @@ export function useSleepTimer() {
       }
       setSleepTimer(mins);
     },
-    [setSleepTimer, setPlayer, addToast]
+    [setSleepTimer, finishSleep, addToast]
   );
 
   useEffect(() => {
@@ -33,16 +40,14 @@ export function useSleepTimer() {
       if (remainingMs > 0) {
         const remainingMins = Math.ceil(remainingMs / 60000);
         sleepRef.current = setTimeout(() => {
-          audioEngine.stop();
-          setPlayer({ isPlaying: false });
-          addToast('Sleep timer ended');
+          void finishSleep();
         }, remainingMs);
         useStore.getState().setSleepTimer(remainingMins);
       } else {
         useStore.getState().setSleepTimer(0);
       }
     }
-  }, [setPlayer, addToast]);
+  }, [finishSleep]);
 
   return { handleSleep };
 }

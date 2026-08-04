@@ -3,8 +3,9 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Station } from '../types';
 import StationCard from './StationCard';
 import FilterBar from './FilterBar';
+import RecentRow from './RecentRow';
 import { useStore } from '../store/store';
-import { Loader2, Radio, SlidersHorizontal, Heart } from 'lucide-react';
+import { Radio, SlidersHorizontal, Heart } from 'lucide-react';
 
 interface StationGridProps {
   stations: Station[];
@@ -34,6 +35,8 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
   const title = titleOverride ?? (favoritesOnly ? 'Favorites' : hasFilters ? 'Filtered Stations' : 'All Stations');
   const isFavoritesView = titleOverride === 'Favorites' || favoritesOnly;
   const initialSync = syncState.inProgress && totalStationCount === 0 && stations.length === 0;
+  const recentlyPlayed = useStore((s) => s.recentlyPlayed);
+  const showRecent = !hideFilters && !isFavoritesView && !hasFilters && recentlyPlayed.length > 0;
   const COLUMNS = 3;
   const ROW_HEIGHT = 116;
   const rowCount = Math.ceil(stations.length / COLUMNS);
@@ -52,6 +55,7 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
 
   return (
     <>
+      {showRecent && <RecentRow stations={recentlyPlayed} onSelect={onStationClick} />}
       <div className="grid-header">
         <div className="grid-title-row">
           <h2 className="grid-title">{title}</h2>
@@ -74,16 +78,14 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
         </div>
       )}
       {initialSync ? (
-        <div className="empty-state loading-state">
-          <Loader2 className="empty-icon is-spinning" size={28} strokeWidth={1.8} aria-hidden="true" />
-          <div>
-            <p className="empty-title">Syncing station directory</p>
-            <p className="empty-copy">
-              {syncState.progress > 0
-                ? `${syncState.progress.toLocaleString()} stations found so far`
-                : 'Finding playable stations...'}
-            </p>
-          </div>
+        <div className="skeleton-grid" aria-hidden="true">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div className="skeleton-card" key={i}>
+              <div className="skeleton-card__thumb shimmer" />
+              <div className="skeleton-card__line shimmer" style={{ width: `${50 + ((i * 13) % 40)}%` }} />
+              <div className="skeleton-card__line skeleton-card__line--sm shimmer" style={{ width: `${30 + ((i * 17) % 30)}%` }} />
+            </div>
+          ))}
         </div>
       ) : totalStationCount === 0 && !syncState.inProgress ? (
         <div className="empty-state">

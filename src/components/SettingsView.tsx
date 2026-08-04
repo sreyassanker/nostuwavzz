@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
-import { Globe2, Moon, Monitor, Palette, Sun, Trash2, WifiOff, Play } from 'lucide-react';
-import { useStore, type ThemeMode } from '../store/store';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Globe2, Moon, Monitor, Palette, Play, Search, Sun, Trash2, WifiOff } from 'lucide-react';
+import { useStore, type Density, type ThemeMode } from '../store/store';
 import { clearStations } from '../lib/stationCache';
 import { clearCache as clearImageCache } from '../lib/imageCache';
 import { useSleepTimer } from '../lib/useSleepTimer';
@@ -11,16 +11,71 @@ const THEMES: { key: ThemeMode; label: string; icon: typeof Sun }[] = [
   { key: 'system', label: 'System', icon: Monitor },
 ];
 
+const DENSITIES: { key: Density; label: string }[] = [
+  { key: 'compact', label: 'Compact' },
+  { key: 'normal', label: 'Normal' },
+  { key: 'cozy', label: 'Cozy' },
+];
+
 const SLEEP_OPTIONS = [15, 30, 60, 90];
 
+interface SettingRow {
+  title: string;
+  hint?: ReactNode;
+  keyword?: string;
+  stack?: boolean;
+  control?: ReactNode;
+}
+
+interface SettingGroup {
+  label: string;
+  icon?: ReactNode;
+  keyword?: string;
+  rows: SettingRow[];
+}
+
+function SwitchControl({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`settings__switch-btn ${checked ? 'is-on' : ''}`}
+      onClick={onChange}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+    >
+      <span className="settings__switch" />
+    </button>
+  );
+}
+
 export default function SettingsView() {
+  const [query, setQuery] = useState('');
   const theme = useStore((s) => s.theme);
   const setTheme = useStore((s) => s.setTheme);
+  const dynamicAccent = useStore((s) => s.dynamicAccent);
+  const setDynamicAccent = useStore((s) => s.setDynamicAccent);
+  const pureBlack = useStore((s) => s.pureBlack);
+  const setPureBlack = useStore((s) => s.setPureBlack);
+  const density = useStore((s) => s.density);
+  const setDensity = useStore((s) => s.setDensity);
   const dataSaver = useStore((s) => s.dataSaver);
   const setDataSaver = useStore((s) => s.setDataSaver);
   const showUnverified = useStore((s) => s.showUnverified);
   const setShowUnverified = useStore((s) => s.setShowUnverified);
   const sleepTimerMinutes = useStore((s) => s.sleepTimerMinutes);
+  const crossfade = useStore((s) => s.crossfade);
+  const setCrossfade = useStore((s) => s.setCrossfade);
+  const crossfadeDuration = useStore((s) => s.crossfadeDuration);
+  const setCrossfadeDuration = useStore((s) => s.setCrossfadeDuration);
   const addToast = useStore((s) => s.addToast);
   const setAllStations = useStore((s) => s.setAllStations);
   const setCurrentStations = useStore((s) => s.setCurrentStations);
@@ -40,109 +95,317 @@ export default function SettingsView() {
     addToast('Image cache cleared', 'info');
   }, [addToast]);
 
+  const groups = useMemo<SettingGroup[]>(
+    () => [
+      {
+        label: 'Appearance',
+        icon: <Palette size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'theme color',
+        rows: [
+          {
+            title: 'Theme',
+            hint: 'Light, dark, or follow the system.',
+            keyword: 'dark light mode',
+            stack: true,
+            control: (
+              <div className="settings__segmented" role="group" aria-label="Theme">
+                {THEMES.map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`settings__segment ${theme === key ? 'is-active' : ''}`}
+                    onClick={() => setTheme(key)}
+                    aria-pressed={theme === key}
+                  >
+                    <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ),
+          },
+          {
+            title: 'Density',
+            hint: 'Compact, normal, or cozy spacing.',
+            keyword: 'size spacing compact cozy',
+            stack: true,
+            control: (
+              <div className="settings__segmented" role="group" aria-label="Density">
+                {DENSITIES.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`settings__segment ${density === key ? 'is-active' : ''}`}
+                    onClick={() => setDensity(key)}
+                    aria-pressed={density === key}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ),
+          },
+          {
+            title: 'Dynamic accent from station art',
+            hint: "Colors the app with the current station's artwork.",
+            keyword: 'accent color artwork logo',
+            control: (
+              <SwitchControl
+                checked={dynamicAccent}
+                onChange={() => setDynamicAccent(!dynamicAccent)}
+                label="Dynamic accent from station art"
+              />
+            ),
+          },
+          {
+            title: 'Pure black (AMOLED)',
+            hint: 'Deep black backgrounds in dark mode.',
+            keyword: 'oled black dark',
+            control: (
+              <SwitchControl
+                checked={pureBlack}
+                onChange={() => setPureBlack(!pureBlack)}
+                label="Pure black (AMOLED)"
+              />
+            ),
+          },
+        ],
+      },
+      {
+        label: 'Station directory',
+        icon: <Globe2 size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'cache sync',
+        rows: [
+          {
+            title: 'Show unverified stations',
+            hint: 'Includes stations that may be offline or unreliable.',
+            keyword: 'verified offline reliable',
+            control: (
+              <SwitchControl
+                checked={showUnverified}
+                onChange={() => setShowUnverified(!showUnverified)}
+                label="Show unverified stations"
+              />
+            ),
+          },
+          {
+            title: 'Clear station cache',
+            hint: 'Removes the saved station list. Sync to reload.',
+            keyword: 'reset list delete',
+            control: (
+              <button type="button" className="settings__danger" onClick={handleClearStations}>
+                <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                Clear
+              </button>
+            ),
+          },
+          {
+            title: 'Clear image cache',
+            hint: 'Frees storage used by station logos.',
+            keyword: 'photos storage delete',
+            control: (
+              <button type="button" className="settings__danger" onClick={handleClearImages}>
+                <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                Clear
+              </button>
+            ),
+          },
+        ],
+      },
+      {
+        label: 'Data',
+        icon: <WifiOff size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'network mobile',
+        rows: [
+          {
+            title: 'Data saver mode',
+            hint: 'Skips station logo downloads to reduce mobile data.',
+            keyword: 'save data logos',
+            control: (
+              <SwitchControl
+                checked={dataSaver}
+                onChange={() => setDataSaver(!dataSaver)}
+                label="Data saver mode"
+              />
+            ),
+          },
+        ],
+      },
+      {
+        label: 'Playback',
+        icon: <Play size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'sleep timer',
+        rows: [
+          {
+            title: 'Crossfade between stations',
+            hint: 'Fades the current station into the next when switching.',
+            keyword: 'fade transition blend gapless',
+            control: (
+              <SwitchControl
+                checked={crossfade}
+                onChange={() => setCrossfade(!crossfade)}
+                label="Crossfade between stations"
+              />
+            ),
+          },
+          {
+            title: 'Crossfade duration',
+            hint: 'How long the fade takes when switching stations.',
+            keyword: 'fade length seconds',
+            stack: true,
+            control: (
+              <div className="settings__slider-row">
+                <input
+                  type="range"
+                  className="settings__slider"
+                  min="0.5"
+                  max="3"
+                  step="0.1"
+                  value={crossfadeDuration}
+                  disabled={!crossfade}
+                  onChange={(e) => setCrossfadeDuration(parseFloat(e.target.value))}
+                  aria-label="Crossfade duration"
+                />
+                <span className="settings__slider-value">{crossfadeDuration.toFixed(1)}s</span>
+              </div>
+            ),
+          },
+          {
+            title: 'Sleep timer default',
+            hint: 'Fades playback out and stops after the chosen time.',
+            keyword: 'sleep fade stop timer',
+            stack: true,
+            control: (
+              <div className="settings__chips">
+                {SLEEP_OPTIONS.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`chip ${sleepTimerMinutes === m ? 'is-active' : ''}`}
+                    onClick={() => handleSleep(m)}
+                  >
+                    {m} min
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`chip ${sleepTimerMinutes === 0 ? 'is-active' : ''}`}
+                  onClick={() => handleSleep(0)}
+                >
+                  Off
+                </button>
+              </div>
+            ),
+          },
+        ],
+      },
+      {
+        label: 'About',
+        keyword: 'info version',
+        rows: [
+          {
+            title: 'Nostu Wavzz',
+            hint: (
+              <>
+                Rediscover the magic of radio. 50,000+ live stations, no ads, no tracking.
+                Station metadata ©{' '}
+                <a
+                  href="https://www.radio-browser.info"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="settings__link"
+                >
+                  radio-browser.info
+                </a>
+                .
+              </>
+            ),
+          },
+        ],
+      },
+    ],
+    [
+      theme,
+      setTheme,
+      density,
+      setDensity,
+      dynamicAccent,
+      setDynamicAccent,
+      pureBlack,
+      setPureBlack,
+      showUnverified,
+      setShowUnverified,
+      dataSaver,
+      setDataSaver,
+      sleepTimerMinutes,
+      handleSleep,
+      handleClearStations,
+      handleClearImages,
+      crossfade,
+      setCrossfade,
+      crossfadeDuration,
+      setCrossfadeDuration,
+    ]
+  );
+
+  const q = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!q) return groups;
+    return groups
+      .map((g) => {
+        const groupMatch = `${g.label} ${g.keyword ?? ''}`.toLowerCase().includes(q);
+        return {
+          ...g,
+          rows: groupMatch
+            ? g.rows
+            : g.rows.filter((r) => `${r.title} ${r.keyword ?? ''}`.toLowerCase().includes(q)),
+        };
+      })
+      .filter((g) => g.rows.length > 0);
+  }, [groups, q]);
+
   return (
     <div className="settings">
       <div className="settings__header">
         <h2 className="grid-title">Settings</h2>
       </div>
 
-      <section className="settings__section">
-        <h3 className="settings__label">
-          <Palette size={15} strokeWidth={1.8} aria-hidden="true" /> Theme
-        </h3>
-        <div className="settings__segmented" role="group" aria-label="Theme">
-          {THEMES.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              className={`settings__segment ${theme === key ? 'is-active' : ''}`}
-              onClick={() => setTheme(key)}
-              aria-pressed={theme === key}
-            >
-              <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="settings__section">
-        <h3 className="settings__label">
-          <Globe2 size={15} strokeWidth={1.8} aria-hidden="true" /> Station directory
-        </h3>
-        <button
-          type="button"
-          className={`settings__toggle ${showUnverified ? 'is-on' : ''}`}
-          onClick={() => setShowUnverified(!showUnverified)}
-          role="switch"
-          aria-checked={showUnverified}
-        >
-          <span className="settings__toggle-text">Show unverified stations</span>
-          <span className="settings__switch" />
-        </button>
-        <p className="settings__hint">Includes stations that may be offline or unreliable.</p>
-
-        <button type="button" className="settings__danger" onClick={handleClearStations}>
-          <Trash2 size={15} strokeWidth={1.8} aria-hidden="true" />
-          Clear station cache
-        </button>
-        <button type="button" className="settings__danger" onClick={handleClearImages}>
-          <Trash2 size={15} strokeWidth={1.8} aria-hidden="true" />
-          Clear image cache
-        </button>
-      </section>
-
-      <section className="settings__section">
-        <h3 className="settings__label">
-          <WifiOff size={15} strokeWidth={1.8} aria-hidden="true" /> Data
-        </h3>
-        <button
-          type="button"
-          className={`settings__toggle ${dataSaver ? 'is-on' : ''}`}
-          onClick={() => setDataSaver(!dataSaver)}
-          role="switch"
-          aria-checked={dataSaver}
-        >
-          <span className="settings__toggle-text">Data saver mode</span>
-          <span className="settings__switch" />
-        </button>
-        <p className="settings__hint">Skips station logo downloads to reduce mobile data.</p>
-      </section>
-
-      <section className="settings__section">
-        <h3 className="settings__label">
-          <Play size={15} strokeWidth={1.8} aria-hidden="true" /> Sleep timer default
-        </h3>
-        <div className="settings__chips">
-          {SLEEP_OPTIONS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`chip ${sleepTimerMinutes === m ? 'is-active' : ''}`}
-              onClick={() => handleSleep(m)}
-            >
-              {m} min
-            </button>
-          ))}
-          <button
-            type="button"
-            className={`chip ${sleepTimerMinutes === 0 ? 'is-active' : ''}`}
-            onClick={() => handleSleep(0)}
-          >
-            Off
+      <div className="settings__search">
+        <Search size={16} strokeWidth={1.8} className="settings__search-icon" aria-hidden="true" />
+        <input
+          type="search"
+          className="settings__search-input"
+          placeholder="Search settings"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search settings"
+        />
+        {query && (
+          <button type="button" className="settings__search-clear" onClick={() => setQuery('')}>
+            Clear
           </button>
-        </div>
-      </section>
+        )}
+      </div>
 
-      <section className="settings__section settings__section--about">
-        <h3 className="settings__label">About</h3>
-        <p className="settings__hint">
-          Nostu Wavzz — rediscover the magic of radio. 50,000+ live stations, no ads, no tracking.
-        </p>
-        <p className="settings__hint">
-          Station metadata © <a href="https://www.radio-browser.info" target="_blank" rel="noopener noreferrer" className="settings__link">radio-browser.info</a>.
-        </p>
-      </section>
+      {visible.length === 0 && <p className="settings__no-results">No settings match &quot;{query}&quot;.</p>}
+
+      {visible.map((g) => (
+        <section key={g.label} className="settings__group">
+          <h3 className="settings__group-head">
+            {g.icon}
+            {g.label}
+          </h3>
+          {g.rows.map((r) => (
+            <div key={r.title} className={`settings__row ${r.stack ? 'settings__row--stack' : ''}`}>
+              <div className="settings__row-text">
+                <span className="settings__row-title">{r.title}</span>
+                {r.hint && <span className="settings__row-hint">{r.hint}</span>}
+              </div>
+              {r.control && (r.stack ? <div className="settings__row-stack">{r.control}</div> : r.control)}
+            </div>
+          ))}
+        </section>
+      ))}
     </div>
   );
 }

@@ -5,16 +5,17 @@ import { audioEngine } from './lib/audioEngine';
 import { fetchAllStations, TARGET_STATIONS, type FetchProgressCallback } from './lib/fetchStations';
 import { loadAllStations, saveStationsBatch, setLastSyncTime, getLastSyncTime } from './lib/stationCache';
 import { filterStations } from './lib/filter';
+import { getFaviconWithCache } from './lib/imageCache';
+import { extractDominantColor } from './lib/colorExtract';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useTheme } from './lib/useTheme';
 import type { Station } from './types';
 import Header from './components/Header';
 import StationGrid from './components/StationGrid';
-import PlayerBar from './components/PlayerBar';
+import PlayerSheet from './components/PlayerSheet';
 import SearchModal from './components/SearchModal';
 import ToastContainer from './components/Toast';
 import MobileTabBar from './components/MobileTabBar';
-import FullPlayer from './components/FullPlayer';
 import SettingsView from './components/SettingsView';
 
 const GlobeView = lazy(() => import('./components/GlobeView'));
@@ -71,6 +72,9 @@ export default function App() {
   const setSearchOpen = useStore((s) => s.setSearchOpen);
   const activeTab = useStore((s) => s.activeTab);
   const setPlayerOpen = useStore((s) => s.setPlayerOpen);
+  const dynamicAccent = useStore((s) => s.dynamicAccent);
+  const setAccentColor = useStore((s) => s.setAccentColor);
+  const addRecentStation = useStore((s) => s.addRecentStation);
 
   useTheme();
   const isMobile = useMediaQuery('(max-width: 760px)');
@@ -274,6 +278,22 @@ export default function App() {
     return () => window.removeEventListener('online', onOnline);
   }, [syncInProgress]);
 
+  // Theme the app accent from the currently playing station's artwork
+  useEffect(() => {
+    const station = useStore.getState().player.currentStation;
+    if (!dynamicAccent || !station?.favicon) return;
+    let cancelled = false;
+    getFaviconWithCache(station.favicon)
+      .then((src) => extractDominantColor(src))
+      .then((color) => {
+        if (!cancelled && color) setAccentColor(color);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStation?.stationuuid, dynamicAccent, setAccentColor]);
+
   // Audio event listeners
   useEffect(() => {
     const onFailed = (_e: Event) => {
@@ -281,15 +301,21 @@ export default function App() {
       addToast('Station unavailable', 'error');
     };
     const onPlaying = () => setPlayer({ isPlaying: true });
+    const onPaused = () => setPlayer({ isPlaying: false });
+    const onStopped = () => setPlayer({ isPlaying: false });
     const onEnded = () => setPlayer({ isPlaying: false });
 
     audioEngine.addEventListener('failed', onFailed);
     audioEngine.addEventListener('playing', onPlaying);
+    audioEngine.addEventListener('paused', onPaused);
+    audioEngine.addEventListener('stopped', onStopped);
     audioEngine.addEventListener('ended', onEnded);
 
     return () => {
       audioEngine.removeEventListener('failed', onFailed);
       audioEngine.removeEventListener('playing', onPlaying);
+      audioEngine.removeEventListener('paused', onPaused);
+      audioEngine.removeEventListener('stopped', onStopped);
       audioEngine.removeEventListener('ended', onEnded);
     };
   }, []);
@@ -322,12 +348,13 @@ export default function App() {
 
       try {
         await audioEngine.play(url, station.stationuuid, station);
+        addRecentStation(station);
       } catch {
         setPlayer({ isPlaying: false });
         addToast('Failed to play station', 'error');
       }
     },
-    [currentStation, isMobile]
+    [currentStation, isMobile, addRecentStation]
   );
 
   const handlePrev = useCallback(() => {
@@ -514,8 +541,7 @@ export default function App() {
           </section>
         </main>
       )}
-      <PlayerBar onPrev={handlePrev} onNext={handleNext} />
-      <FullPlayer onPrev={handlePrev} onNext={handleNext} />
+      <PlayerSheet onPrev={handlePrev} onNext={handleNext} />
       <SearchModal onSelect={handleStationClick} />
       <ToastContainer />
     </div>

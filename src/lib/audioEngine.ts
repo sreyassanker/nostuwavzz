@@ -1,4 +1,5 @@
 import type { Station } from '../types';
+import { useStore } from '../store/store';
 import {
   updateState,
   onAction,
@@ -8,9 +9,7 @@ import {
 
 export type MediaActionHandler = () => void;
 
-const CROSSFADE_DURATION = 1200;
 const CROSSFADE_STEPS = 24;
-const CROSSFADE_INTERVAL = CROSSFADE_DURATION / CROSSFADE_STEPS;
 
 export class AudioEngine extends EventTarget {
   private audio: HTMLAudioElement;
@@ -20,9 +19,19 @@ export class AudioEngine extends EventTarget {
   private lastStationUuid: string | null = null;
   private abortController: AbortController | null = null;
   private reconnecting = false;
+  private generation = 0;
   private onNext: MediaActionHandler | null = null;
   private onPrev: MediaActionHandler | null = null;
   private isFadingOut = false;
+
+  private crossfadeMs(): number {
+    const { crossfadeDuration } = useStore.getState();
+    return crossfadeDuration * 1000;
+  }
+
+  private crossfadeEnabled(): boolean {
+    return useStore.getState().crossfade;
+  }
 
   constructor() {
     super();
@@ -33,7 +42,7 @@ export class AudioEngine extends EventTarget {
     this.audio.addEventListener('waiting', () => this.handleStall());
     this.audio.addEventListener('playing', () => this.handlePlaying());
     this.audio.addEventListener('canplay', () => this.clearStall());
-    this.audio.addEventListener('error', () => this.handleError());
+    this.audio.addEventListener('error', () => this.handleError(this.audio.error?.code));
     this.audio.addEventListener('ended', () => this.handleEnded());
     this.audio.addEventListener('loadstart', () => {
       this.dispatchEvent(new CustomEvent('loading'));
@@ -142,8 +151,8 @@ export class AudioEngine extends EventTarget {
   }
 
   private mediaPlay() {
+    if (!this.currentUrl) return;
     this.audio.play().catch(() => {});
-    this.dispatchEvent(new CustomEvent('playing'));
   }
 
   private mediaPause() {
@@ -165,13 +174,15 @@ export class AudioEngine extends EventTarget {
     this.lastStationUuid = stationuuid || null;
     this.reconnectAttempts = 0;
     this.reconnecting = false;
+    this.generation++;
+    this.clearStall();
     this.abortController = new AbortController();
 
     if (station) {
       this.updateMediaMetadata(station);
     }
 
-    if (wasPlaying && this.audio.src) {
+    if (wasPlaying && this.audio.src && this.crossfadeEnabled()) {
       await this.crossfadeTo(url);
     } else {
       this.stopImmediate();
@@ -197,7 +208,7 @@ export class AudioEngine extends EventTarget {
     newAudio.addEventListener('waiting', () => this.handleStall());
     newAudio.addEventListener('playing', () => this.handlePlaying());
     newAudio.addEventListener('canplay', () => this.clearStall());
-    newAudio.addEventListener('error', () => this.handleError());
+    newAudio.addEventListener('error', () => this.handleError(newAudio.error?.code));
     newAudio.addEventListener('ended', () => this.handleEnded());
     newAudio.addEventListener('loadstart', () => {
       this.dispatchEvent(new CustomEvent('loading'));
@@ -211,6 +222,8 @@ export class AudioEngine extends EventTarget {
     this.audio = newAudio;
     this.isFadingOut = true;
     let step = 0;
+    const duration = this.crossfadeMs();
+    const intervalMs = Math.max(16, duration / CROSSFADE_STEPS);
 
     return new Promise<void>((resolve) => {
       const interval = setInterval(() => {
@@ -231,7 +244,7 @@ export class AudioEngine extends EventTarget {
         } else {
           newAudio.play().catch(() => {});
         }
-      }, CROSSFADE_INTERVAL);
+      }, intervalMs);
     });
   }
 
@@ -254,8 +267,15 @@ export class AudioEngine extends EventTarget {
       .catch(() => { this.reconnecting = false; });
   }
 
-  private handlePlayError(_err: unknown) {
+  private handlePlayError(err: unknown) {
+    const name = (err as DOMException)?.name;
+    if (name === 'AbortError' || name === 'NotAllowedError') {
+      this.reconnecting = false;
+      return;
+    }
+    const gen = this.generation;
     if (this.reconnectAttempts >= 3) {
+      if (gen !== this.generation) return;
       this.reconnecting = false;
       this.dispatchEvent(
         new CustomEvent('failed', {
@@ -267,7 +287,7 @@ export class AudioEngine extends EventTarget {
 
     this.reconnectAttempts++;
     setTimeout(() => {
-      if (this.currentUrl) {
+      if (gen === this.generation && this.currentUrl) {
         this.reconnect(this.currentUrl);
       }
     }, 350);
@@ -277,8 +297,10 @@ export class AudioEngine extends EventTarget {
     this.dispatchEvent(new CustomEvent('buffering'));
     this.clearStall();
 
+    const gen = this.generation;
     this.stallTimer = setTimeout(() => {
-      if (this.reconnectAttempts < 3 && this.currentUrl) {
+      if (gen !== this.generation || !this.currentUrl) return;
+      if (this.reconnectAttempts < 2 && this.currentUrl) {
         this.reconnectAttempts++;
         this.reconnect(this.currentUrl);
       } else {
@@ -293,18 +315,21 @@ export class AudioEngine extends EventTarget {
           })
         );
       }
-    }, 2600);
+    }, 4500);
   }
 
-  private handleError() {
+  private handleError(code?: number) {
+    if (code === MediaError.MEDIA_ERR_ABORTED) return;
+    const gen = this.generation;
     if (this.reconnectAttempts < 2 && this.currentUrl) {
       this.reconnectAttempts++;
       setTimeout(() => {
-        if (this.currentUrl) {
+        if (gen === this.generation && this.currentUrl) {
           this.reconnect(this.currentUrl);
         }
       }, 450);
     } else {
+      if (gen !== this.generation) return;
       this.reconnecting = false;
       this.dispatchEvent(
         new CustomEvent('failed', {
@@ -341,6 +366,7 @@ export class AudioEngine extends EventTarget {
     this.setPlaybackStateNone();
     this.currentUrl = null;
     this.reconnecting = false;
+    this.dispatchEvent(new CustomEvent('stopped'));
   }
 
   dispose() {
@@ -356,6 +382,25 @@ export class AudioEngine extends EventTarget {
 
   setVolume(vol: number) {
     this.audio.volume = Math.max(0, Math.min(1, vol));
+  }
+
+  fadeOut(durationMs: number): Promise<void> {
+    if (!this.isPlaying() || this.isFadingOut) return Promise.resolve();
+    const start = this.audio.volume;
+    const steps = 24;
+    const intervalMs = Math.max(16, durationMs / steps);
+    let step = 0;
+    return new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        step++;
+        this.audio.volume = start * (1 - step / steps);
+        if (step >= steps) {
+          clearInterval(interval);
+          this.audio.volume = 0;
+          resolve();
+        }
+      }, intervalMs);
+    });
   }
 
   getVolume(): number {

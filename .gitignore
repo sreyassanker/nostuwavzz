@@ -32,7 +32,16 @@ src-tauri/wavz-keystore.jks
 *.pem
 *.key
 
+# Original screenshot files (WhatsApp images)
+/Screenshots/
+
+# Temporary viewer page
+docs/screenshots/viewer.html
+
 # Tauri generated / build artifacts
 src-tauri/gen/*
 !src-tauri/gen/schemas
 *.apk.aligned
+
+# APK files
+*.apk
