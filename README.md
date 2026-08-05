@@ -34,35 +34,16 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 
 ## Demo
 
-> **Watch the magic happen.** The video plays automatically when you open this README.
-
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=Gf_LIFhkxWg" target="_blank" rel="noopener">
-    <img src="https://img.youtube.com/vi/Gf_LIFhkxWg/hqdefault.jpg" alt="Nostu Wavzz promotional video" width="640">
-  </a>
+  <iframe width="700" height="394"
+    src="https://www.youtube-nocookie.com/embed/Gf_LIFhkxWg?autoplay=1&mute=1&rel=0"
+    title="Nostu Wavzz — promotional video"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen
+    loading="lazy"></iframe>
 </p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=Gf_LIFhkxWg" target="_blank" rel="noopener">
-    <img src="https://img.shields.io/badge/Watch_on_YouTube-ff4d6d?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch on YouTube">
-  </a>
-</p>
-
-<details>
-  <summary><strong>▶ Play video right here</strong> (click to expand)</summary>
-
-  <p align="center">
-    <iframe width="640" height="360"
-      src="https://www.youtube-nocookie.com/embed/Gf_LIFhkxWg?autoplay=1&mute=1&rel=0"
-      title="Nostu Wavzz — promotional video"
-      frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-      referrerpolicy="strict-origin-when-cross-origin"
-      allowfullscreen
-      loading="lazy"></iframe>
-  </p>
-
-</details>
 
 ---
 
