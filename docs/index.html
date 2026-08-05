@@ -424,6 +424,10 @@
       line-height: 1.7;
     }
 
+    #install.section {
+      padding-top: 40px;
+    }
+
     /* ============ INSTALL ============ */
     .install-steps {
       max-width: 680px;
@@ -764,6 +768,46 @@
       margin: 0 auto;
     }
 
+    .demo-video {
+      max-width: 900px;
+      margin: 48px auto 0;
+      padding: 0 24px;
+      text-align: center;
+    }
+
+    .demo-video .demo-video-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 28px;
+      font-weight: 400;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .demo-video .demo-video-desc {
+      font-size: 14px;
+      color: var(--ink-mute);
+      margin-bottom: 24px;
+    }
+
+    .demo-video-frame {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      box-shadow: var(--shadow-lg);
+      background: #000;
+    }
+
+    .demo-video-frame iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
     @media (max-width: 640px) {
       .screenshots-scroll {
         gap: 20px;
@@ -771,6 +815,7 @@
       }
       .phone-card { flex: 0 0 220px; }
       .screenshots-section { padding: 100px 0; }
+      .demo-video { margin-top: 48px; }
     }
 
     /* ============ RESPONSIVE ============ */
@@ -1053,6 +1098,21 @@
           <p class="phone-caption-title">Favorites</p>
           <p class="phone-caption-desc">One-tap heart to save the stations you love. Persisted across sessions, always a tap away.</p>
         </div>
+      </div>
+    </div>
+
+    <div class="demo-video">
+      <h3 class="demo-video-title">Watch it in action</h3>
+      <p class="demo-video-desc">See Nostu Wavzz bring the magic of radio back — the video plays automatically.</p>
+      <div class="demo-video-frame">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/Gf_LIFhkxWg?autoplay=1&mute=1&rel=0"
+          title="Nostu Wavzz — promotional video"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen
+          loading="lazy"></iframe>
       </div>
     </div>
   </section>
