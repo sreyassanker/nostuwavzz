@@ -36,7 +36,7 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=Gf_LIFhkxWg">
-    <img src="https://img.youtube.com/vi/Gf_LIFhkxWg/maxresdefault.jpg" alt="Nostu Wavzz — promotional video" width="700" />
+    <img src="https://img.shields.io/badge/View_on_YouTube-000000?style=flat&logo=youtube&logoColor=red" alt="View on YouTube" />
   </a>
 </p>
 
