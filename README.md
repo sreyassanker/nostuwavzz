@@ -35,14 +35,9 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 ## Demo
 
 <p align="center">
-  <iframe width="700" height="394"
-    src="https://www.youtube-nocookie.com/embed/Gf_LIFhkxWg?autoplay=1&mute=1&rel=0"
-    title="Nostu Wavzz — promotional video"
-    frameborder="0"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    referrerpolicy="strict-origin-when-cross-origin"
-    allowfullscreen
-    loading="lazy"></iframe>
+  <a href="https://www.youtube.com/watch?v=Gf_LIFhkxWg">
+    <img src="https://img.youtube.com/vi/Gf_LIFhkxWg/maxresdefault.jpg" alt="Nostu Wavzz — promotional video" width="700" />
+  </a>
 </p>
 
 ---
