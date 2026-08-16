@@ -270,8 +270,8 @@ The signed APK lands in `src-tauri/gen/android/app/build/outputs/apk/universal/r
 If you enjoy Nostu Wavzz, consider supporting the author! Your support helps keep the project alive and growing.
 
 <p align="center">
-  <a href="upi://pay?pa=YOUR_UPI_ID&pn=Sreyas&cu=INR">
-    <img src="https://img.shields.io/badge/Support_via_UPI-ff4d6d?style=for-the-badge&logo=googlepay&logoColor=white" alt="Support via UPI" />
+  <a href="https://buymeacoffee.com/sreyassanker">
+    <img src="https://img.shields.io/badge/Buy_Me_a_Coffee-ffdd00?style=for-the-badge&logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee" />
   </a>
 </p>
 
