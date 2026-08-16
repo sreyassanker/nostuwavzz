@@ -1,6 +1,6 @@
 [package]
 name = "nostu_wavzz"
-version = "0.1.0"
+version = "2.0.0"
 description = "Nostu Wavzz — Global Internet Radio"
 authors = ["Nostu Wavzz"]
 edition = "2021"
