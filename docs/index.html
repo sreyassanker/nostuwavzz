@@ -54,7 +54,7 @@
       height: 100vh;
       pointer-events: none;
       z-index: 0;
-      opacity: 0.75;
+      opacity: 0.9;
     }
 
     /* Subtle CRT scanline overlay */
@@ -62,12 +62,12 @@
       content: '';
       position: fixed;
       inset: 0;
-      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%), 
                   linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
       background-size: 100% 3px, 6px 100%;
       pointer-events: none;
       z-index: 999;
-      opacity: 0.4;
+      opacity: 0.3;
     }
 
     a { color: inherit; }
@@ -1513,8 +1513,8 @@ SOFTWARE.</p>
       // Render flowing frequency waves
       for (let i = 0; i < 3; i++) {
         ctx.beginPath();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = i === 0 ? 'rgba(255, 51, 102, 0.15)' : 'rgba(241, 238, 227, 0.04)';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = i === 0 ? 'rgba(255, 51, 102, 0.28)' : 'rgba(241, 238, 227, 0.08)';
         
         for (let x = 0; x < width; x += 15) {
           const y = height / 2 + Math.sin(x * 0.003 + time * 0.02 + i) * 70 * Math.sin(time * 0.01 + i) + Math.cos(x * 0.001 - time * 0.015) * 40;
