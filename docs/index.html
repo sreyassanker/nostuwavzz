@@ -150,14 +150,13 @@
       position: relative;
     }
 
-    .logo::before {
-      content: '';
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 14px var(--accent);
+    .logo img {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      flex-shrink: 0;
+      -webkit-text-fill-color: initial;
+      box-shadow: 0 0 14px var(--accent-glow);
     }
 
     .logo:hover { opacity: 0.9; transform: scale(1.02); }
@@ -275,6 +274,23 @@
       backdrop-filter: blur(10px);
       box-shadow: 0 0 30px rgba(255, 51, 102, 0.15);
     }
+
+    .eyebrow-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .eyebrow-icon-link {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      transition: transform var(--transition);
+    }
+
+    .eyebrow-icon-link:hover { transform: scale(1.12); }
 
     h1.hero-title {
       font-family: 'Instrument Serif', serif;
@@ -881,6 +897,9 @@
     }
 
     .footer-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
       font-size: 26px;
       font-weight: 800;
       letter-spacing: -0.04em;
@@ -889,6 +908,15 @@
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
+    }
+
+    .footer-logo-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      -webkit-text-fill-color: initial;
+      box-shadow: 0 0 14px var(--accent-glow);
     }
 
     .footer-links { display: flex; gap: 36px; flex-wrap: wrap; }
@@ -958,7 +986,7 @@
   <header class="nav" id="nav">
     <div class="container">
       <div class="nav-inner">
-        <a href="./" class="logo">Nostu Wavzz</a>
+        <a href="https://github.com/sreyassanker/nostuwavzz" class="logo" target="_blank" rel="noopener"><img src="./assets/icon.png" alt="Nostu Wavzz icon" width="30" height="30">Nostu Wavzz</a>
         <div class="nav-links">
           <a href="#features" class="nav-link">Features</a>
           <a href="#gallery" class="nav-link">Gallery</a>
@@ -979,7 +1007,7 @@
   <!-- Hero -->
   <section class="hero">
     <div class="container">
-      <p class="eyebrow fade-in">The nostalgia of radio, reimagined</p>
+      <p class="eyebrow fade-in"><a href="https://github.com/sreyassanker/nostuwavzz" target="_blank" rel="noopener" class="eyebrow-icon-link"><img src="./assets/icon.png" alt="Nostu Wavzz icon" class="eyebrow-icon"></a>The nostalgia of radio, reimagined</p>
 
       <h1 class="hero-title fade-in fade-in-delay-1">REMEMBER THE<br><em>MAGIC OF RADIO?</em><br>IT'S STILL HERE.</h1>
 
@@ -1378,7 +1406,7 @@ SOFTWARE.</p>
     <div class="container">
       <div class="footer-grid">
         <div>
-          <a href="./" class="footer-logo">Nostu Wavzz</a>
+          <a href="https://github.com/sreyassanker/nostuwavzz" class="footer-logo" target="_blank" rel="noopener"><img src="./assets/icon.png" alt="Nostu Wavzz icon" class="footer-logo-icon">Nostu Wavzz</a>
         </div>
         <div class="footer-links">
           <a href="https://github.com/sreyassanker/nostuwavzz" class="footer-link" target="_blank" rel="noopener">GitHub</a>
