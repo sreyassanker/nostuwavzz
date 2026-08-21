@@ -1,0 +1,5 @@
+-keep class app.tauri.mediasession.** { *; }
+-keep class app.tauri.mediasession.MediaSessionPlugin { *; }
+-keep class app.tauri.mediasession.MediaActionReceiver { *; }
+-keep class app.tauri.mediasession.MediaSessionCleanupService { *; }
+-keepattributes *Annotation*
