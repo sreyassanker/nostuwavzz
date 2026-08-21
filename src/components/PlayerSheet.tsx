@@ -12,12 +12,15 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ListMusic,
 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { audioEngine } from '../lib/audioEngine';
 import { toggleFavorite as storageToggleFavorite } from '../lib/storage';
 import { useSleepTimer } from '../lib/useSleepTimer';
 import StationLogo from './StationLogo';
+import type { Station } from '../types';
+import { useFocusTrap } from '../lib/useFocusTrap';
 
 const VOLUME_KEY = 'radio.volume';
 const SLEEP_OPTIONS = [15, 30, 60, 90];
@@ -26,9 +29,10 @@ const SWIPE_THRESHOLD = 70;
 interface PlayerSheetProps {
   onPrev: () => void;
   onNext: () => void;
+  onPlayStation: (station: Station) => void;
 }
 
-export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
+export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerSheetProps) {
   const player = useStore((s) => s.player);
   const setPlayer = useStore((s) => s.setPlayer);
   const playerOpen = useStore((s) => s.playerOpen);
@@ -37,22 +41,47 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
   const favoriteUuids = useStore((s) => s.favoriteUuids);
   const setFavoriteUuids = useStore((s) => s.setFavoriteUuids);
   const addToast = useStore((s) => s.addToast);
+  const queue = useStore((s) => s.queue);
+  const removeFromQueue = useStore((s) => s.removeFromQueue);
+  const clearQueue = useStore((s) => s.clearQueue);
   const { handleSleep } = useSleepTimer();
 
   const [sleepOpen, setSleepOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [dragDir, setDragDir] = useState<'prev' | 'next' | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const miniRef = useRef<HTMLDivElement>(null);
   const sleepMenuRef = useRef<HTMLDivElement>(null);
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const fullSleepMenuRef = useRef<HTMLDivElement>(null);
+  const queueMenuRef = useRef<HTMLDivElement>(null);
+  const fullPlayerRef = useFocusTrap(playerOpen);
+  const bufferingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playFromQueueRef = useRef<(uuid: string) => void>(() => {});
+  const dragStart = useRef<{ x: number; y: number; target: Element | null } | null>(null);
   const dragState = useRef({ dx: 0, dir: null as 'prev' | 'next' | null, active: false });
-  const [, forceRender] = useState(0);
+  const sheetDragStart = useRef<{ x: number; y: number } | null>(null);
+  const lastOpenRef = useRef(0);
 
-  const setDrag = useCallback(
-    (patch: Partial<{ dx: number; dir: 'prev' | 'next' | null; active: boolean }>) => {
-      dragState.current = { ...dragState.current, ...patch };
-      forceRender((n) => n + 1);
-    },
-    []
-  );
+  playFromQueueRef.current = (uuid: string) => {
+    const station = useStore.getState().queue.find((s) => s.stationuuid === uuid);
+    if (!station) return;
+    removeFromQueue(uuid);
+    onPlayStation(station);
+  };
+
+  const openPlayer = useCallback(() => {
+    if (!useStore.getState().player.currentStation) return;
+    lastOpenRef.current = Date.now();
+    setPlayerOpen(true);
+  }, [setPlayerOpen]);
+
+  useEffect(() => {
+    if (!playerOpen) {
+      setSleepOpen(false);
+      setQueueOpen(false);
+    }
+  }, [playerOpen]);
 
   // Restore volume from localStorage
   useEffect(() => {
@@ -69,8 +98,14 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
   }, [setPlayer]);
 
   useEffect(() => {
-    const onBuf = () => setBuffering(true);
-    const onOk = () => setBuffering(false);
+    const onBuf = () => {
+      if (bufferingTimer.current) clearTimeout(bufferingTimer.current);
+      setBuffering(true);
+    };
+    const onOk = () => {
+      if (bufferingTimer.current) clearTimeout(bufferingTimer.current);
+      bufferingTimer.current = setTimeout(() => setBuffering(false), 500);
+    };
     audioEngine.addEventListener('buffering', onBuf);
     audioEngine.addEventListener('playing', onOk);
     audioEngine.addEventListener('failed', onOk);
@@ -85,29 +120,43 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (sleepMenuRef.current && !sleepMenuRef.current.contains(e.target as Node)) {
+      const insideMini = sleepMenuRef.current?.contains(e.target as Node);
+      const insideFull = fullSleepMenuRef.current?.contains(e.target as Node);
+      const insideQueue = queueMenuRef.current?.contains(e.target as Node);
+      if (!insideMini && !insideFull) {
         setSleepOpen(false);
+      }
+      if (!insideQueue) {
+        setQueueOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSleepOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const handlePlayPause = useCallback(() => {
     if (audioEngine.isPlaying()) {
-      audioEngine.stop();
+      audioEngine.pause();
       setPlayer({ isPlaying: false });
     } else if (player.currentStation) {
       const url = player.currentStation.url_resolved || player.currentStation.url;
-      if (url) {
-        audioEngine.play(url, player.currentStation.stationuuid, player.currentStation).catch(() => {
-          setPlayer({ isPlaying: false });
-          addToast('Failed to play station', 'error');
-        });
+      if (!url) return;
+      if (audioEngine.getActiveUrl()) {
+        void audioEngine.resume().then(() => setPlayer({ isPlaying: true }));
+      } else {
+        audioEngine.play(url, player.currentStation.stationuuid, player.currentStation);
         setPlayer({ isPlaying: true });
       }
     }
-  }, [player.currentStation, setPlayer, addToast]);
+  }, [player.currentStation, setPlayer]);
 
   const handleVolume = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,49 +182,82 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
     setFavoriteUuids(newFavs);
   }, [player.currentStation, favoriteUuids, setFavoriteUuids, addToast]);
 
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('button, input, label')) return;
-      dragStart.current = { x: e.clientX, y: e.clientY };
-      setDrag({ dx: 0, dir: null, active: false });
-    },
-    [setDrag]
-  );
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, label')) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    dragStart.current = { x: e.clientX, y: e.clientY, target };
+    dragState.current = { dx: 0, dir: null, active: false };
+    setDragging(false);
+    setDragDir(null);
+  }, []);
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragStart.current) return;
-      const dx = e.clientX - dragStart.current.x;
-      const dy = e.clientY - dragStart.current.y;
-      if (!dragState.current.active && Math.abs(dx) < 10) return;
-      if (!dragState.current.active && Math.abs(dy) > Math.abs(dx)) {
-        dragStart.current = null;
-        return;
-      }
-      const clamped = Math.max(-130, Math.min(130, dx));
-      setDrag({
-        dx: clamped,
-        dir: clamped < -8 ? 'next' : clamped > 8 ? 'prev' : null,
-        active: true,
-      });
-    },
-    [setDrag]
-  );
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    if (!dragState.current.active && Math.abs(dx) < 10) return;
+    if (!dragState.current.active && Math.abs(dy) > Math.abs(dx)) {
+      dragStart.current = null;
+      return;
+    }
+    const clamped = Math.max(-130, Math.min(130, dx));
+    dragState.current.dx = clamped;
+    const dir = clamped < -8 ? 'next' : clamped > 8 ? 'prev' : null;
+    dragState.current.dir = dir;
+    dragState.current.active = true;
+    setDragging(true);
+    setDragDir(dir);
+    if (miniRef.current) {
+      miniRef.current.style.transform = clamped === 0 ? '' : `translateX(${clamped}px)`;
+    }
+  }, []);
 
   const endDrag = useCallback(() => {
-    dragStart.current = null;
+    const pending = dragStart.current;
     const { dx, dir, active } = dragState.current;
+    dragStart.current = null;
+    dragState.current = { dx: 0, dir: null, active: false };
+    setDragging(false);
+    setDragDir(null);
+    if (miniRef.current) {
+      miniRef.current.style.transform = '';
+    }
     if (active && Math.abs(dx) > SWIPE_THRESHOLD) {
       if (dir === 'next') onNext();
       else if (dir === 'prev') onPrev();
+    } else if (pending?.target?.closest('.player-sheet__mini-left')) {
+      openPlayer();
     }
-    setDrag({ dx: 0, dir: null, active: false });
-  }, [onNext, onPrev, setDrag]);
+  }, [onNext, onPrev, openPlayer]);
+
+  // Full player sheet gestures: swipe down to dismiss, swipe L/R to change station
+  const onSheetPointerDown = useCallback((e: React.PointerEvent) => {
+    sheetDragStart.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  const onSheetPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!sheetDragStart.current) return;
+      const dx = e.clientX - sheetDragStart.current.x;
+      const dy = e.clientY - sheetDragStart.current.y;
+      sheetDragStart.current = null;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) onNext();
+        else onPrev();
+      } else if (dy > 90) {
+        setPlayerOpen(false);
+      }
+    },
+    [onNext, onPrev, setPlayerOpen]
+  );
 
   const station = player.currentStation;
   const fav = station ? favoriteUuids.has(station.stationuuid) : false;
-  const drag = dragState.current;
 
   const metaParts: string[] = [];
   if (station?.country) metaParts.push(station.country);
@@ -186,18 +268,94 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
   const stationName = station?.name || 'Select a station';
   const marquee = stationName.length > 26;
 
+  const renderQueueMenu = (withRef?: (el: HTMLDivElement | null) => void) => (
+    <div ref={withRef} className="sleep-menu sleep-menu--open queue-menu" role="menu" aria-label="Up next">
+      {queue.length === 0 ? (
+        <div className="queue-menu__empty">Queue is empty</div>
+      ) : (
+        queue.map((s) => (
+          <div key={s.stationuuid} className="queue-menu__row">
+            <button
+              type="button"
+              className="queue-menu__play"
+              role="menuitem"
+              onClick={() => {
+                setQueueOpen(false);
+                playFromQueueRef.current(s.stationuuid);
+              }}
+              title={`Play ${s.name}`}
+            >
+              <span className="queue-menu__play-name">{s.name}</span>
+              <span className="queue-menu__play-meta">
+                {[s.country, s.bitrate ? `${s.bitrate}k` : null].filter(Boolean).join(' · ') || '\u00a0'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="queue-menu__remove"
+              role="menuitem"
+              onClick={() => removeFromQueue(s.stationuuid)}
+              aria-label={`Remove ${s.name} from queue`}
+            >
+              <X size={13} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
+        ))
+      )}
+      {queue.length > 0 && (
+        <button
+          type="button"
+          className="queue-menu__clear"
+          role="menuitem"
+          onClick={() => {
+            setQueueOpen(false);
+            clearQueue();
+          }}
+          style={{ color: 'var(--ink-mute)' }}
+        >
+          <ListMusic size={13} strokeWidth={1.8} aria-hidden="true" />
+          Clear queue ({queue.length})
+        </button>
+      )}
+    </div>
+  );
+
+  const renderSleepMenu = (withRef?: (el: HTMLDivElement | null) => void) => (
+    <div ref={withRef} className="sleep-menu sleep-menu--open" id="sleep-menu">
+      {SLEEP_OPTIONS.map((m) => (
+        <button
+          type="button"
+          key={m}
+          onClick={() => { setSleepOpen(false); handleSleep(m); }}
+          style={{
+            background: sleepTimerMinutes === m ? 'var(--bg)' : 'transparent',
+            fontWeight: sleepTimerMinutes === m ? 600 : 400,
+          }}
+        >
+          {m} min
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => { setSleepOpen(false); handleSleep(0); }}
+        style={{ color: 'var(--ink-mute)' }}
+      >
+        Off
+      </button>
+    </div>
+  );
+
   return (
     <>
       <div
-        className={`player-sheet__mini ${drag.active ? 'is-dragging' : ''}`}
-        style={{ transform: drag.active ? `translateX(${drag.dx}px)` : undefined }}
+        ref={miniRef}
+        className={`player-sheet__mini ${dragging ? 'is-dragging' : ''}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
-        onPointerLeave={endDrag}
         onPointerCancel={endDrag}
       >
-        <span className={`player-sheet__swipe player-sheet__swipe--prev ${drag.dir === 'prev' ? 'is-visible' : ''}`} aria-hidden="true">
+        <span className={`player-sheet__swipe player-sheet__swipe--prev ${dragDir === 'prev' ? 'is-visible' : ''}`} aria-hidden="true">
           <ChevronLeft size={22} strokeWidth={2.4} />
         </span>
 
@@ -205,11 +363,11 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
           className="player-sheet__mini-left"
           role="button"
           tabIndex={0}
-          onClick={() => station && setPlayerOpen(true)}
+          onClick={openPlayer}
           onKeyDown={(e) => {
             if ((e.key === 'Enter' || e.key === ' ') && station) {
               e.preventDefault();
-              setPlayerOpen(true);
+              openPlayer();
             }
           }}
           aria-label={station ? `Open player for ${station.name}` : 'Open player'}
@@ -302,32 +460,25 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
             >
               <Timer size={18} strokeWidth={1.8} aria-hidden="true" />
             </button>
-            <div className={`sleep-menu ${sleepOpen ? 'sleep-menu--open' : ''}`} id="sleep-menu">
-              {SLEEP_OPTIONS.map((m) => (
-                <button
-                  type="button"
-                  key={m}
-                  onClick={() => { setSleepOpen(false); handleSleep(m); }}
-                  style={{
-                    background: sleepTimerMinutes === m ? 'var(--bg)' : 'transparent',
-                    fontWeight: sleepTimerMinutes === m ? 600 : 400,
-                  }}
-                >
-                  {m} min
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => { setSleepOpen(false); handleSleep(0); }}
-                style={{ color: 'var(--ink-mute)' }}
-              >
-                Off
-              </button>
-            </div>
+            {sleepOpen && renderSleepMenu()}
+          </div>
+          <div className="queue-dropdown" ref={queueMenuRef}>
+            <button
+              type="button"
+              className={`player-btn player-btn--icon queue-btn ${queue.length > 0 ? 'player-btn--active' : ''}`}
+              onClick={() => setQueueOpen(!queueOpen)}
+              title="Up next"
+              aria-label={`Up next, ${queue.length} in queue`}
+              aria-expanded={queueOpen}
+            >
+              <ListMusic size={18} strokeWidth={1.8} aria-hidden="true" />
+              {queue.length > 0 && <span className="queue-btn__badge">{queue.length > 99 ? '99+' : queue.length}</span>}
+            </button>
+            {queueOpen && renderQueueMenu()}
           </div>
         </div>
 
-        <span className={`player-sheet__swipe player-sheet__swipe--next ${drag.dir === 'next' ? 'is-visible' : ''}`} aria-hidden="true">
+        <span className={`player-sheet__swipe player-sheet__swipe--next ${dragDir === 'next' ? 'is-visible' : ''}`} aria-hidden="true">
           <ChevronRight size={22} strokeWidth={2.4} />
         </span>
       </div>
@@ -341,14 +492,19 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={() => setPlayerOpen(false)}
+              onClick={() => {
+                if (Date.now() - lastOpenRef.current > 350) setPlayerOpen(false);
+              }}
             />
             <motion.div
+              ref={fullPlayerRef}
               className="full-player__sheet"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              onPointerDown={onSheetPointerDown}
+              onPointerUp={onSheetPointerUp}
             >
               <div className="full-player__handle" />
               <div className="full-player__head">
@@ -411,6 +567,52 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
                     </button>
                   </div>
 
+                  {queue.length > 0 && (
+                    <div className="full-player__upnext">
+                      <div className="full-player__upnext-head">
+                        <span className="full-player__upnext-title">UP NEXT</span>
+                        <span className="full-player__upnext-count">{queue.length}</span>
+                        <button
+                          type="button"
+                          className="full-player__upnext-clear"
+                          onClick={() => {
+                            clearQueue();
+                            addToast('Queue cleared');
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="full-player__upnext-list">
+                        {queue.map((s) => (
+                          <div key={s.stationuuid} className="full-player__upnext-item">
+                            <button
+                              type="button"
+                              className="full-player__upnext-play"
+                              onClick={() => playFromQueueRef.current(s.stationuuid)}
+                              title={`Play ${s.name}`}
+                            >
+                              <Play size={12} fill="currentColor" aria-hidden="true" />
+                              <span className="full-player__upnext-name">{s.name}</span>
+                              <span className="full-player__upnext-meta">
+                                {[s.country, s.bitrate ? `${s.bitrate}k` : null].filter(Boolean).join(' · ') || '\u00a0'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="full-player__upnext-remove"
+                              onClick={() => removeFromQueue(s.stationuuid)}
+                              aria-label={`Remove ${s.name} from queue`}
+                              title="Remove from queue"
+                            >
+                              <X size={14} strokeWidth={2} aria-hidden="true" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="full-player__row">
                     <label className="volume-control" htmlFor="fp-volume">
                       <Volume2 size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -435,7 +637,7 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
                     >
                       <Heart size={22} fill={fav ? 'currentColor' : 'none'} aria-hidden="true" />
                     </button>
-                    <div className="sleep-dropdown">
+                    <div className="sleep-dropdown" ref={fullSleepMenuRef}>
                       <button
                         type="button"
                         className={`player-btn player-btn--icon ${sleepTimerMinutes > 0 ? 'player-btn--active' : ''}`}
@@ -445,25 +647,7 @@ export default function PlayerSheet({ onPrev, onNext }: PlayerSheetProps) {
                       >
                         <Timer size={22} strokeWidth={1.8} aria-hidden="true" />
                       </button>
-                      <div className={`sleep-menu ${sleepOpen ? 'sleep-menu--open' : ''}`}>
-                        {SLEEP_OPTIONS.map((m) => (
-                          <button
-                            type="button"
-                            key={m}
-                            onClick={() => { setSleepOpen(false); handleSleep(m); }}
-                            style={{ fontWeight: sleepTimerMinutes === m ? 600 : 400 }}
-                          >
-                            {m} min
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => { setSleepOpen(false); handleSleep(0); }}
-                          style={{ color: 'var(--ink-mute)' }}
-                        >
-                          Off
-                        </button>
-                      </div>
+                      {sleepOpen && renderSleepMenu()}
                     </div>
                   </div>
                 </>

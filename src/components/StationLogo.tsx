@@ -23,9 +23,16 @@ export default function StationLogo({ station, size = 40, className }: StationLo
     if (!url || dataSaver) return;
     getFaviconWithCache(url)
       .then((result) => {
-        if (!cancelled) setSrc(result);
+        if (cancelled) return;
+        if (!result) {
+          setFailed(true);
+          return;
+        }
+        setSrc(result);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
     };

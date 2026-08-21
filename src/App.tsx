@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store/store';
 import { audioEngine } from './lib/audioEngine';
@@ -18,7 +18,6 @@ import ToastContainer from './components/Toast';
 import MobileTabBar from './components/MobileTabBar';
 import SettingsView from './components/SettingsView';
 
-const GlobeView = lazy(() => import('./components/GlobeView'));
 
 let worker: Worker | null = null;
 let filterId = 0;
@@ -53,7 +52,6 @@ export default function App() {
   const favoritesOnly = useStore((s) => s.favoritesOnly);
   const showUnverified = useStore((s) => s.showUnverified);
   const favoriteUuids = useStore((s) => s.favoriteUuids);
-  const totalStationCount = useStore((s) => s.totalStationCount);
   const currentStation = useStore((s) => s.player.currentStation);
   const syncInProgress = useStore((s) => s.sync.inProgress);
   const setAllStations = useStore((s) => s.setAllStations);
@@ -75,6 +73,10 @@ export default function App() {
   const dynamicAccent = useStore((s) => s.dynamicAccent);
   const setAccentColor = useStore((s) => s.setAccentColor);
   const addRecentStation = useStore((s) => s.addRecentStation);
+  const incrementPlay = useStore((s) => s.incrementPlay);
+  const addPlayTime = useStore((s) => s.addPlayTime);
+  const myStations = useStore((s) => s.myStations);
+  const myStationsOnly = useStore((s) => s.myStationsOnly);
 
   useTheme();
   const isMobile = useMediaQuery('(max-width: 760px)');
@@ -88,8 +90,31 @@ export default function App() {
     [allStations, favoriteUuids]
   );
 
+  const bootedRef = useRef(false);
+  const syncInProgressRef = useRef(syncInProgress);
+  useEffect(() => {
+    syncInProgressRef.current = syncInProgress;
+  }, [syncInProgress]);
+
+  const pushStations = useCallback((stations: Station[]) => {
+    const state = useStore.getState();
+    state.setAllStations(stations);
+    state.setTotalStationCount(stations.length);
+    if (
+      !state.filterQuery.trim() &&
+      state.selectedContinent === 'All' &&
+      state.selectedTag === 'All' &&
+      state.selectedCountryCode === 'All' &&
+      !state.favoritesOnly
+    ) {
+      state.setCurrentStations(stations);
+    }
+  }, []);
+
   // Boot: load from IndexedDB, then background fetch
   useEffect(() => {
+    if (bootedRef.current) return;
+    bootedRef.current = true;
     (async () => {
       try {
         const cached = await loadAllStations();
@@ -132,9 +157,7 @@ export default function App() {
 
             if (stations.length > 0) {
               await saveStationsBatch(stations);
-              setAllStations(stations);
-              setTotalStationCount(stations.length);
-              setCurrentStations(stations);
+              pushStations(stations);
               setSyncState({ inProgress: false, phase: 'done', lastSync: new Date().toISOString() });
               await setLastSyncTime();
               addToast(`${stations.length} stations synced`);
@@ -149,7 +172,7 @@ export default function App() {
           setSyncState({ inProgress: false, phase: 'done', lastSync: lastSync || null });
         }
 
-        if (cached.length === 0 && totalStationCount === 0) {
+        if (cached.length === 0 && useStore.getState().totalStationCount === 0) {
           setSyncState({ inProgress: false, phase: 'idle' });
         }
       } catch (e) {
@@ -269,14 +292,14 @@ export default function App() {
           !lastSync ||
           state.allStations.length < TARGET_STATIONS * 0.9 ||
           (Date.now() - new Date(lastSync).getTime()) > 86400000;
-        if (needsRefresh && state.allStations.length > 0 && !syncInProgress) {
+        if (needsRefresh && state.allStations.length > 0 && !syncInProgressRef.current) {
           state.addToast('Network restored, refreshing stations...', 'info');
         }
       });
     };
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
-  }, [syncInProgress]);
+  }, []);
 
   // Theme the app accent from the currently playing station's artwork
   useEffect(() => {
@@ -284,7 +307,7 @@ export default function App() {
     if (!dynamicAccent || !station?.favicon) return;
     let cancelled = false;
     getFaviconWithCache(station.favicon)
-      .then((src) => extractDominantColor(src))
+      .then((src) => (src && !cancelled ? extractDominantColor(src) : null))
       .then((color) => {
         if (!cancelled && color) setAccentColor(color);
       })
@@ -294,50 +317,23 @@ export default function App() {
     };
   }, [currentStation?.stationuuid, dynamicAccent, setAccentColor]);
 
-  // Audio event listeners
-  useEffect(() => {
-    const onFailed = (_e: Event) => {
-      setPlayer({ isPlaying: false });
-      addToast('Station unavailable', 'error');
-    };
-    const onPlaying = () => setPlayer({ isPlaying: true });
-    const onPaused = () => setPlayer({ isPlaying: false });
-    const onStopped = () => setPlayer({ isPlaying: false });
-    const onEnded = () => setPlayer({ isPlaying: false });
-
-    audioEngine.addEventListener('failed', onFailed);
-    audioEngine.addEventListener('playing', onPlaying);
-    audioEngine.addEventListener('paused', onPaused);
-    audioEngine.addEventListener('stopped', onStopped);
-    audioEngine.addEventListener('ended', onEnded);
-
-    return () => {
-      audioEngine.removeEventListener('failed', onFailed);
-      audioEngine.removeEventListener('playing', onPlaying);
-      audioEngine.removeEventListener('paused', onPaused);
-      audioEngine.removeEventListener('stopped', onStopped);
-      audioEngine.removeEventListener('ended', onEnded);
-    };
-  }, []);
-
   // Play station
   const handleStationClick = useCallback(
-    async (station: Station) => {
+    (station: Station) => {
       const url = station.url_resolved || station.url;
       if (!url) return;
 
       if (currentStation?.stationuuid === station.stationuuid) {
         if (audioEngine.isPlaying()) {
-          audioEngine.stop();
+          audioEngine.pause();
           setPlayer({ isPlaying: false });
+        } else if (audioEngine.getActiveUrl()) {
+          void audioEngine.resume().then(() => setPlayer({ isPlaying: true }));
         } else {
-          try {
-            await audioEngine.play(url, station.stationuuid, station);
-            setPlayer({ isPlaying: true });
-          } catch {
-            setPlayer({ isPlaying: false });
-            addToast('Failed to play', 'error');
-          }
+          setActiveStationUuid(station.stationuuid);
+          setPlayer({ currentStation: station, isPlaying: true });
+          if (isMobile) setPlayerOpen(true);
+          void audioEngine.play(url, station.stationuuid, station);
         }
         return;
       }
@@ -346,15 +342,9 @@ export default function App() {
       setPlayer({ currentStation: station, isPlaying: true });
       if (isMobile) setPlayerOpen(true);
 
-      try {
-        await audioEngine.play(url, station.stationuuid, station);
-        addRecentStation(station);
-      } catch {
-        setPlayer({ isPlaying: false });
-        addToast('Failed to play station', 'error');
-      }
+      void audioEngine.play(url, station.stationuuid, station);
     },
-    [currentStation, isMobile, addRecentStation]
+    [currentStation, isMobile, setActiveStationUuid, setPlayer, setPlayerOpen]
   );
 
   const handlePrev = useCallback(() => {
@@ -398,11 +388,76 @@ export default function App() {
       }
       if (e.key === 'Escape') {
         setSearchOpen(false);
+        useStore.getState().setPlayerOpen(false);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [setSearchOpen]);
+
+  const advanceQueue = useCallback(() => {
+    const state = useStore.getState();
+    const next = state.playNextFromQueue();
+    if (next) {
+      state.addToast(`Auto-advancing to ${next.name}`);
+      handleStationClick(next);
+      return true;
+    }
+    return false;
+  }, [handleStationClick]);
+
+  // Audio event listeners
+  useEffect(() => {
+    const onFailed = (_e: Event) => {
+      if (advanceQueue()) return;
+      setPlayer({ isPlaying: false });
+      addToast('Station unavailable', 'error');
+    };
+    const onPlaying = (e: Event) => {
+      setPlayer({ isPlaying: true });
+      const uuid = (e as CustomEvent).detail?.stationuuid;
+      if (!uuid) return;
+      const recent =
+        useStore.getState().allStations.find((s) => s.stationuuid === uuid) ??
+        useStore.getState().player.currentStation;
+      if (recent) {
+        addRecentStation(recent);
+        incrementPlay(recent);
+      }
+    };
+    const onPaused = () => setPlayer({ isPlaying: false });
+    const onStopped = () => setPlayer({ isPlaying: false });
+    const onEnded = () => {
+      if (advanceQueue()) return;
+      setPlayer({ isPlaying: false });
+    };
+
+    audioEngine.addEventListener('failed', onFailed);
+    audioEngine.addEventListener('playing', onPlaying);
+    audioEngine.addEventListener('paused', onPaused);
+    audioEngine.addEventListener('stopped', onStopped);
+    audioEngine.addEventListener('ended', onEnded);
+
+    return () => {
+      audioEngine.removeEventListener('failed', onFailed);
+      audioEngine.removeEventListener('playing', onPlaying);
+      audioEngine.removeEventListener('paused', onPaused);
+      audioEngine.removeEventListener('stopped', onStopped);
+      audioEngine.removeEventListener('ended', onEnded);
+    };
+  }, [addRecentStation, addToast, setPlayer, advanceQueue, incrementPlay]);
+
+  // Play-time ticker (every 30s while playing)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!audioEngine.isPlaying()) return;
+      const state = useStore.getState();
+      const cur = state.player.currentStation;
+      if (!cur) return;
+      addPlayTime(cur.stationuuid, 30);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [addPlayTime]);
 
   const handleClearFilters = useCallback(() => {
     setFavoritesOnly(false);
@@ -438,9 +493,7 @@ export default function App() {
       });
       if (stations.length > 0) {
         await saveStationsBatch(stations);
-        setAllStations(stations);
-        setTotalStationCount(stations.length);
-        setCurrentStations(stations);
+        pushStations(stations);
         setSyncState({ inProgress: false, phase: 'done' });
         await setLastSyncTime();
         addToast(`${stations.length} stations synced`);
@@ -453,7 +506,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Header onSync={handleSync} />
+      <Header onSync={handleSync} isMobile={isMobile} />
       {isMobile ? (
         <>
           <main className="main main--mobile">
@@ -475,20 +528,7 @@ export default function App() {
                   />
                 </motion.section>
               )}
-              {activeTab === 'globe' && (
-                <motion.section
-                  key="tab-globe"
-                  className="panel panel--map"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                >
-                  <Suspense fallback={<GlobeFallback />}>
-                    <GlobeView stations={currentStations} />
-                  </Suspense>
-                </motion.section>
-              )}
+
               {activeTab === 'favorites' && (
                 <motion.section
                   key="tab-favorites"
@@ -504,6 +544,25 @@ export default function App() {
                     onClearFilters={handleClearFilters}
                     onSync={handleSync}
                     titleOverride="Favorites"
+                    hideFilters
+                  />
+                </motion.section>
+              )}
+              {activeTab === 'mine' && (
+                <motion.section
+                  key="tab-mine"
+                  className="panel panel--grid"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <StationGrid
+                    stations={myStations}
+                    onStationClick={handleStationClick}
+                    onClearFilters={handleClearFilters}
+                    onSync={handleSync}
+                    titleOverride="My Stations"
                     hideFilters
                   />
                 </motion.section>
@@ -528,33 +587,22 @@ export default function App() {
         <main className="main">
           <section className="panel panel--grid" id="grid-panel">
             <StationGrid
-              stations={currentStations}
+              stations={myStationsOnly ? myStations : currentStations}
               onStationClick={handleStationClick}
               onClearFilters={handleClearFilters}
               onSync={handleSync}
+              titleOverride={myStationsOnly ? 'My Stations' : undefined}
+              hideFilters={myStationsOnly}
             />
           </section>
-          <section className="panel panel--map" id="map-panel">
-            <Suspense fallback={<GlobeFallback />}>
-              <GlobeView stations={currentStations.length > 0 ? currentStations : []} />
-            </Suspense>
-          </section>
+
         </main>
       )}
-      <PlayerSheet onPrev={handlePrev} onNext={handleNext} />
+      <PlayerSheet onPrev={handlePrev} onNext={handleNext} onPlayStation={handleStationClick} />
       <SearchModal onSelect={handleStationClick} />
       <ToastContainer />
     </div>
   );
 }
 
-function GlobeFallback() {
-  return (
-    <div className="globe-view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="empty-state">
-        <div className="loading-spinner" aria-hidden="true" />
-        <p className="empty-copy">Loading globe...</p>
-      </div>
-    </div>
-  );
-}
+

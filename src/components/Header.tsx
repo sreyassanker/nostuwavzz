@@ -1,8 +1,9 @@
 import { useStore } from '../store/store';
-import { Heart, RefreshCw } from 'lucide-react';
+import { Heart, RefreshCw, Radio } from 'lucide-react';
 
 interface HeaderProps {
   onSync: () => void;
+  isMobile: boolean;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -17,10 +18,12 @@ function timeAgo(dateStr: string | null): string {
   return `${days}d ago`;
 }
 
-export default function Header({ onSync }: HeaderProps) {
+export default function Header({ onSync, isMobile }: HeaderProps) {
   const favorites = useStore((s) => s.favoriteUuids);
   const favoritesOnly = useStore((s) => s.favoritesOnly);
   const setFavoritesOnly = useStore((s) => s.setFavoritesOnly);
+  const myStationsOnly = useStore((s) => s.myStationsOnly);
+  const setMyStationsOnly = useStore((s) => s.setMyStationsOnly);
   const currentStation = useStore((s) => s.player.currentStation);
   const isPlaying = useStore((s) => s.player.isPlaying);
   const syncState = useStore((s) => s.sync);
@@ -60,17 +63,32 @@ export default function Header({ onSync }: HeaderProps) {
             <RefreshCw size={15} strokeWidth={1.8} aria-hidden="true" />
           </button>
         )}
-        <button
-          type="button"
-          className={`header-fav-btn ${favoritesOnly ? 'is-active' : ''}`}
-          onClick={() => setFavoritesOnly(!favoritesOnly)}
-          title="Show favorites"
-          aria-label={`Show favorites, ${favorites.size} saved`}
-          aria-pressed={favoritesOnly}
-        >
-          <Heart className="header-fav-icon" size={14} fill={favoritesOnly ? 'currentColor' : 'none'} aria-hidden="true" />
-          <span className="header-fav-count">{favorites.size}</span>
-        </button>
+        {!isMobile && (
+          <>
+            <button
+              type="button"
+              className={`header-fav-btn ${myStationsOnly ? 'is-active' : ''}`}
+              onClick={() => setMyStationsOnly(!myStationsOnly)}
+              title="Show my stations"
+              aria-label="Show my stations"
+              aria-pressed={myStationsOnly}
+            >
+              <Radio className="header-fav-icon" size={14} fill={myStationsOnly ? 'currentColor' : 'none'} aria-hidden="true" />
+              <span className="header-fav-count">My</span>
+            </button>
+            <button
+              type="button"
+              className={`header-fav-btn ${favoritesOnly ? 'is-active' : ''}`}
+              onClick={() => setFavoritesOnly(!favoritesOnly)}
+              title="Show favorites"
+              aria-label={`Show favorites, ${favorites.size} saved`}
+              aria-pressed={favoritesOnly}
+            >
+              <Heart className="header-fav-icon" size={14} fill={favoritesOnly ? 'currentColor' : 'none'} aria-hidden="true" />
+              <span className="header-fav-count">{favorites.size}</span>
+            </button>
+          </>
+        )}
         <span className="on-air-badge" hidden={!isPlaying || !currentStation}>
           <span className="on-air-dot" />
           <span className="on-air-name">{currentStation?.name}</span>

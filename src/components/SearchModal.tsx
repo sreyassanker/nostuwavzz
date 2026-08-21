@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useStore } from '../store/store';
 import type { Station } from '../types';
 import { countryCodeToFlag, escapeHtml } from '../lib/utils';
+import { useFocusTrap } from '../lib/useFocusTrap';
 
 interface SearchModalProps {
   onSelect: (station: Station) => void;
@@ -17,6 +18,7 @@ export default function SearchModal({ onSelect }: SearchModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trapRef = useFocusTrap(searchOpen);
 
   useEffect(() => {
     if (searchOpen) {
@@ -100,7 +102,7 @@ export default function SearchModal({ onSelect }: SearchModalProps) {
   return (
     <div className={`search-modal ${searchOpen ? 'search-modal--open' : ''}`} id="search-modal">
       <div className="search-backdrop" onClick={() => setSearchOpen(false)} />
-      <div className="search-container">
+      <div ref={trapRef} className="search-container">
         <input
           ref={inputRef}
           type="text"
@@ -148,6 +150,11 @@ export default function SearchModal({ onSelect }: SearchModalProps) {
           })}
           {query.trim() && results.length === 0 && (
             <div className="search-empty">No results</div>
+          )}
+          {!query.trim() && (
+            <div className="search-empty search-empty--hint">
+              Type to search stations, countries, tags…
+            </div>
           )}
         </div>
       </div>

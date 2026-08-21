@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
-use tokio::time::{interval, sleep};
+#[cfg(not(mobile))]
+use tokio::time::interval;
+use tokio::time::sleep;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Station {
@@ -156,14 +158,16 @@ async fn sync_all_stations(
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
-        .user_agent("NostuWavzz/2.0 (Tauri; https://github.com/nostu-wavzz)")
+        .user_agent("NostuWavzz/3.0 (Tauri; +https://github.com/sreyassanker/nostuwavzz)")
         .build()
         .map_err(|e| e.to_string())?;
 
     let mut all_stations: Vec<Station> = Vec::with_capacity(50_000);
     let batch_size = 1000;
     let max_stations = 50_000;
+    let max_consecutive_failures = 6;
     let mut offset = 0;
+    let mut failures = 0;
 
     let mirrors = [
         "https://de1.api.radio-browser.info",
@@ -189,6 +193,10 @@ async fn sync_all_stations(
         match client.get(&url).send().await {
             Ok(resp) => {
                 if !resp.status().is_success() {
+                    failures += 1;
+                    if failures >= max_consecutive_failures {
+                        break;
+                    }
                     sleep(Duration::from_secs(2)).await;
                     continue;
                 }
@@ -209,6 +217,7 @@ async fn sync_all_stations(
 
                         all_stations.extend(filtered);
                         offset += batch_size;
+                        failures = 0;
 
                         app.emit("sync-progress", SyncProgress {
                             fetched: all_stations.len(),
@@ -225,6 +234,10 @@ async fn sync_all_stations(
                     }
                     Err(e) => {
                         eprintln!("JSON parse error at offset {}: {}", offset, e);
+                        failures += 1;
+                        if failures >= max_consecutive_failures {
+                            break;
+                        }
                         sleep(Duration::from_secs(2)).await;
                         continue;
                     }
@@ -232,6 +245,10 @@ async fn sync_all_stations(
             }
             Err(e) => {
                 eprintln!("Fetch error at offset {}: {}", offset, e);
+                failures += 1;
+                if failures >= max_consecutive_failures {
+                    break;
+                }
                 sleep(Duration::from_secs(3)).await;
                 continue;
             }
@@ -349,12 +366,20 @@ async fn search_stations(
             "EXISTS (SELECT 1 FROM stations_fts fts WHERE s.rowid = fts.rowid AND fts.stations_fts MATCH ?{})",
             idx
         ));
-        let q = if query.contains(' ') {
-            format!("\"{}\"", query)
-        } else {
-            format!("{}*", query)
-        };
-        param_values.push(Box::new(q));
+        let tokens: Vec<String> = query
+            .split_whitespace()
+            .map(|w| {
+                w.chars()
+                    .filter(|c| c.is_alphanumeric() || ['-'].contains(c))
+                    .collect::<String>()
+            })
+            .filter(|w| !w.is_empty())
+            .map(|w| format!("{}*", w))
+            .collect();
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+        param_values.push(Box::new(tokens.join(" ")));
     }
 
     if let Some(ref c) = country {
@@ -665,6 +690,75 @@ async fn get_favorites(
 }
 
 #[tauri::command]
+async fn fetch_image(url: String) -> Result<serde_json::Value, String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("unsupported scheme".into());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .connect_timeout(Duration::from_secs(5))
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        )
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("http {}", resp.status().as_u16()));
+    }
+
+    let mime = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if bytes.is_empty() {
+        return Err("empty body".into());
+    }
+    if bytes.len() > 512 * 1024 {
+        return Err("too large".into());
+    }
+
+    Ok(serde_json::json!({
+        "mime": mime,
+        "data": b64_encode(&bytes),
+    }))
+}
+
+const B64_ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+fn b64_encode(input: &[u8]) -> String {
+    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    for chunk in input.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(B64_ALPHABET[(n >> 18 & 63) as usize] as char);
+        out.push(B64_ALPHABET[(n >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            B64_ALPHABET[(n >> 6 & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            B64_ALPHABET[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+#[tauri::command]
 async fn set_last_played(
     state: State<'_, AppState>,
     stationuuid: String,
@@ -698,8 +792,8 @@ async fn get_last_played(state: State<'_, AppState>) -> Result<Option<Station>, 
     }
 }
 
-fn setup_background_sync(app: AppHandle) {
-    let handle = app.clone();
+#[cfg(not(mobile))]
+fn setup_background_sync(app: AppHandle) {    let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut ticker = interval(Duration::from_secs(86400));
         loop {
@@ -746,6 +840,26 @@ fn setup_background_sync(app: AppHandle) {
     });
 }
 
+fn open_database(path: &std::path::Path) -> Connection {
+    let conn = match Connection::open(path) {
+        Ok(c) => c,
+        Err(e) => panic!("failed to open database: {}", e),
+    };
+    match init_db(&conn) {
+        Ok(()) => return conn,
+        Err(e) => eprintln!("database init failed ({}); rebuilding catalog", e),
+    }
+
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let name = format!("nostu_wavzz.db{}", suffix);
+        let _ = std::fs::remove_file(path.with_file_name(name));
+    }
+
+    let conn = Connection::open(path).expect("failed to re-open database after recovery");
+    init_db(&conn).expect("failed to re-initialize database after recovery");
+    conn
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -758,14 +872,13 @@ pub fn run() {
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
             let db_path = app_dir.join("nostu_wavzz.db");
 
-            let conn = Connection::open(&db_path)
-                .expect("failed to open database");
-            init_db(&conn).expect("failed to initialize database");
+            let conn = open_database(&db_path);
 
             app.manage(AppState {
                 db: Arc::new(Mutex::new(conn)),
             });
 
+            #[cfg(not(mobile))]
             setup_background_sync(app.handle().clone());
 
             Ok(())
@@ -780,6 +893,7 @@ pub fn run() {
             get_distinct_values,
             toggle_favorite,
             get_favorites,
+            fetch_image,
             set_last_played,
             get_last_played,
         ])

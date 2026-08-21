@@ -4,25 +4,50 @@ import {
   updateState,
   onAction,
   clear,
+  initialize as initNativeSession,
   isTauriAndroid as useNativeMediaSession,
 } from './mediaSession';
 
 export type MediaActionHandler = () => void;
 
 const CROSSFADE_STEPS = 24;
+const VOLUME_KEY = 'radio.volume';
+
+function loadSavedVolume(): number {
+  try {
+    const saved = localStorage.getItem(VOLUME_KEY);
+    if (saved) {
+      const v = parseFloat(saved);
+      if (!isNaN(v) && v >= 0 && v <= 1) return v;
+    }
+  } catch {}
+  return 1;
+}
+
+declare global {
+  interface HTMLMediaElement {
+    __nostuGen?: number;
+  }
+}
 
 export class AudioEngine extends EventTarget {
   private audio: HTMLAudioElement;
+  private oldAudio: HTMLAudioElement | null = null;
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private currentUrl: string | null = null;
   private lastStationUuid: string | null = null;
-  private abortController: AbortController | null = null;
+  private reconnectTimers: ReturnType<typeof setTimeout>[] = [];
+  private crossfadeInterval: ReturnType<typeof setInterval> | null = null;
   private reconnecting = false;
   private generation = 0;
   private onNext: MediaActionHandler | null = null;
   private onPrev: MediaActionHandler | null = null;
   private isFadingOut = false;
+  private playbackActive = false;
+  private everPlayed = false;
+  private volume = loadSavedVolume();
+  private nativeListener: Awaited<ReturnType<typeof onAction>> | null = null;
 
   private crossfadeMs(): number {
     const { crossfadeDuration } = useStore.getState();
@@ -35,23 +60,29 @@ export class AudioEngine extends EventTarget {
 
   constructor() {
     super();
-    this.audio = new Audio();
-    this.audio.preload = 'auto';
-
-    this.audio.addEventListener('stalled', () => this.handleStall());
-    this.audio.addEventListener('waiting', () => this.handleStall());
-    this.audio.addEventListener('playing', () => this.handlePlaying());
-    this.audio.addEventListener('canplay', () => this.clearStall());
-    this.audio.addEventListener('error', () => this.handleError(this.audio.error?.code));
-    this.audio.addEventListener('ended', () => this.handleEnded());
-    this.audio.addEventListener('loadstart', () => {
-      this.dispatchEvent(new CustomEvent('loading'));
-    });
-
+    this.audio = this.createAudioElement();
+    this.audio.volume = this.volume;
     this.setupMediaSession();
     if (useNativeMediaSession) {
       this.setupNativeSession();
     }
+  }
+
+  private createAudioElement(): HTMLAudioElement {
+    const el = new Audio();
+    el.preload = 'auto';
+
+    el.addEventListener('stalled', () => this.handleStall(el));
+    el.addEventListener('waiting', () => this.handleStall(el));
+    el.addEventListener('playing', () => this.handlePlaying(el));
+    el.addEventListener('canplay', () => this.clearStall());
+    el.addEventListener('error', () => this.handleError(el.error?.code));
+    el.addEventListener('ended', () => this.handleEnded());
+    el.addEventListener('loadstart', () => {
+      this.dispatchEvent(new CustomEvent('loading', { detail: { url: this.currentUrl } }));
+    });
+
+    return el;
   }
 
   setCallbacks(onNext: MediaActionHandler, onPrev: MediaActionHandler) {
@@ -72,6 +103,7 @@ export class AudioEngine extends EventTarget {
   }
 
   private setupNativeSession() {
+    initNativeSession().catch(() => {});
     onAction((event) => {
       switch (event.action) {
         case 'play':
@@ -92,7 +124,11 @@ export class AudioEngine extends EventTarget {
         default:
           break;
       }
-    }).catch(() => {});
+    })
+      .then((listener) => {
+        this.nativeListener = listener;
+      })
+      .catch(() => {});
   }
 
   private setPlaybackStatePlaying() {
@@ -120,151 +156,187 @@ export class AudioEngine extends EventTarget {
   }
 
   private updateMediaMetadata(station: Station) {
+    const artwork = station.favicon
+      ? [{ src: station.favicon, sizes: '512x512', type: 'image/png' }]
+      : [];
+
     if (useNativeMediaSession) {
       void updateState({
         title: station.name,
-        artist: station.country || 'Radio',
-        album: station.tags?.split(',')[0]?.trim() || 'Nostu Wavzz',
+        artist: station.country || 'Live Radio',
+        album: 'Nostu Wavzz',
         artworkUrl: station.favicon || undefined,
-        isPlaying: true,
         canPrev: true,
         canNext: true,
-        canSeek: false,
       }).catch(() => {});
-      return;
+    } else if ('mediaSession' in navigator) {
+      try {
+        (navigator.mediaSession as unknown as { metadata?: unknown }).metadata =
+          new MediaMetadata({ title: station.name, artist: station.country || 'Live Radio', album: 'Nostu Wavzz', artwork });
+      } catch {
+        // Metro/older webviews may not support MediaMetadata
+      }
     }
-
-    if (!('mediaSession' in navigator)) return;
-
-    const artwork: MediaImage[] = [];
-    if (station.favicon) {
-      artwork.push({ src: station.favicon, sizes: '128x128', type: 'image/png' });
-      artwork.push({ src: station.favicon, sizes: '256x256', type: 'image/png' });
-    }
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: station.name,
-      artist: station.country || 'Radio',
-      album: station.tags?.split(',')[0]?.trim() || 'Nostu Wavzz',
-      artwork,
-    });
   }
 
-  private mediaPlay() {
-    if (!this.currentUrl) return;
-    this.audio.play().catch(() => {});
-  }
-
-  private mediaPause() {
-    this.audio.pause();
-    this.setPlaybackStatePaused();
-    this.dispatchEvent(new CustomEvent('paused'));
-  }
-
-  private handlePlaying() {
+  private handlePlaying(el: HTMLAudioElement) {
+    if (el.__nostuGen !== this.generation) return;
     this.clearStall();
+    this.reconnectAttempts = 0;
+    this.reconnecting = false;
+    this.everPlayed = true;
+    this.playbackActive = true;
     this.setPlaybackStatePlaying();
-    this.dispatchEvent(new CustomEvent('playing'));
+    this.dispatchEvent(
+      new CustomEvent('playing', { detail: { url: this.currentUrl, stationuuid: this.lastStationUuid } })
+    );
+  }
+
+  private isStale(el: HTMLAudioElement): boolean {
+    return el.__nostuGen !== this.generation || (this.audio !== el && this.oldAudio !== el);
   }
 
   async play(url: string, stationuuid?: string, station?: Station): Promise<void> {
-    const wasPlaying = this.isPlaying();
+    const wasPlaying = this.playbackActive;
+
+    this.generation++;
+    this.cancelCrossfade();
+    this.cancelReconnectTimers();
+    this.clearStall();
 
     this.currentUrl = url;
     this.lastStationUuid = stationuuid || null;
     this.reconnectAttempts = 0;
     this.reconnecting = false;
-    this.generation++;
-    this.clearStall();
-    this.abortController = new AbortController();
+    this.playbackActive = false;
+    this.everPlayed = false;
 
     if (station) {
       this.updateMediaMetadata(station);
     }
 
     if (wasPlaying && this.audio.src && this.crossfadeEnabled()) {
-      await this.crossfadeTo(url);
+      this.beginCrossfade(url);
     } else {
-      this.stopImmediate();
-      this.audio.src = url;
-      this.audio.load();
-      try {
-        await this.audio.play();
-      } catch (err) {
-        this.handlePlayError(err);
-      }
+      this.setupAudioForUrl(url);
     }
-
-    this.setPlaybackStatePlaying();
-    this.dispatchEvent(new CustomEvent('playing', { detail: { url, stationuuid } }));
   }
 
-  private async crossfadeTo(newUrl: string): Promise<void> {
+  private setupAudioForUrl(url: string) {
+    this.oldAudio = null;
+    const el = this.audio;
+    el.__nostuGen = this.generation;
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+    el.src = url;
+    el.load();
+    el.volume = this.volume;
+    try {
+      void el.play().catch((err) => this.handlePlayError(err));
+    } catch {
+      // ignored
+    }
+  }
+
+  private beginCrossfade(newUrl: string) {
     const oldAudio = this.audio;
-    const newAudio = new Audio();
-    newAudio.preload = 'auto';
-
-    newAudio.addEventListener('stalled', () => this.handleStall());
-    newAudio.addEventListener('waiting', () => this.handleStall());
-    newAudio.addEventListener('playing', () => this.handlePlaying());
-    newAudio.addEventListener('canplay', () => this.clearStall());
-    newAudio.addEventListener('error', () => this.handleError(newAudio.error?.code));
-    newAudio.addEventListener('ended', () => this.handleEnded());
-    newAudio.addEventListener('loadstart', () => {
-      this.dispatchEvent(new CustomEvent('loading'));
-    });
-
-    oldAudio.volume = 1;
+    const gen = this.generation;
+    const newAudio = this.createAudioElement();
+    newAudio.__nostuGen = gen;
     newAudio.volume = 0;
+    this.oldAudio = oldAudio;
+    this.audio = newAudio;
+    this.isFadingOut = true;
+
     newAudio.src = newUrl;
     newAudio.load();
 
-    this.audio = newAudio;
-    this.isFadingOut = true;
-    let step = 0;
     const duration = this.crossfadeMs();
     const intervalMs = Math.max(16, duration / CROSSFADE_STEPS);
+    const targetVolume = this.volume;
+    let step = 0;
 
-    return new Promise<void>((resolve) => {
-      const interval = setInterval(() => {
-        step++;
-        const progress = step / CROSSFADE_STEPS;
-        const eased = 1 - Math.pow(1 - progress, 3);
-
-        oldAudio.volume = 1 - eased;
-        newAudio.volume = eased;
-
-        if (step >= CROSSFADE_STEPS) {
-          clearInterval(interval);
-          this.isFadingOut = false;
-          oldAudio.pause();
-          oldAudio.src = '';
-          newAudio.play().catch((err) => this.handlePlayError(err));
-          resolve();
-        } else {
-          newAudio.play().catch(() => {});
+    this.crossfadeInterval = setInterval(() => {
+      if (gen !== this.generation) {
+        if (this.crossfadeInterval) {
+          clearInterval(this.crossfadeInterval);
+          this.crossfadeInterval = null;
         }
-      }, intervalMs);
-    });
+        this.isFadingOut = false;
+        this.teardownAudio(oldAudio);
+        return;
+      }
+
+      step++;
+      const progress = step / CROSSFADE_STEPS;
+      const eased = 1 - Math.pow(1 - progress, 3);
+      oldAudio.volume = Math.max(0, (1 - eased) * targetVolume);
+      newAudio.volume = Math.min(targetVolume, eased * targetVolume);
+
+      if (step >= CROSSFADE_STEPS) {
+        if (this.crossfadeInterval) {
+          clearInterval(this.crossfadeInterval);
+          this.crossfadeInterval = null;
+        }
+        this.isFadingOut = false;
+        this.oldAudio = null;
+        this.teardownAudio(oldAudio);
+        newAudio.volume = targetVolume;
+        newAudio.play().catch((err) => this.handlePlayError(err));
+        this.playbackActive = true;
+      } else {
+        newAudio.play().catch(() => {});
+      }
+    }, intervalMs);
   }
 
-  private stopImmediate() {
-    this.audio.pause();
-    this.audio.src = '';
-    this.audio.load();
-    this.currentUrl = null;
+  private teardownAudio(el: HTMLAudioElement) {
+    try {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    } catch {
+      // ignore
+    }
   }
 
-  private reconnect(url: string): void {
+  private cancelCrossfade() {
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    if (this.oldAudio) {
+      this.teardownAudio(this.oldAudio);
+      this.oldAudio = null;
+    }
+    this.isFadingOut = false;
+  }
+
+  private cancelReconnectTimers() {
+    this.reconnectTimers.forEach((t) => clearTimeout(t));
+    this.reconnectTimers = [];
+  }
+
+  private reconnect(url: string) {
     if (this.reconnecting) return;
     this.reconnecting = true;
-    this.audio.src = '';
-    this.audio.load();
-    this.audio.src = url;
-    this.audio.load();
-    this.audio.play()
-      .then(() => { this.reconnecting = false; })
-      .catch(() => { this.reconnecting = false; });
+    const gen = this.generation;
+    const el = this.audio;
+
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+    el.src = url;
+    el.load();
+    el.volume = this.volume;
+    el.play()
+      .then(() => {
+        if (gen === this.generation) this.reconnecting = false;
+      })
+      .catch(() => {
+        if (gen === this.generation) this.reconnecting = false;
+      });
   }
 
   private handlePlayError(err: unknown) {
@@ -274,9 +346,13 @@ export class AudioEngine extends EventTarget {
       return;
     }
     const gen = this.generation;
-    if (this.reconnectAttempts >= 3) {
+    const maxAttempts = this.everPlayed ? 6 : 3;
+    if (this.reconnectAttempts >= maxAttempts) {
       if (gen !== this.generation) return;
       this.reconnecting = false;
+      this.playbackActive = false;
+      this.everPlayed = false;
+      this.reconnectAttempts = 0;
       this.dispatchEvent(
         new CustomEvent('failed', {
           detail: { url: this.currentUrl, reason: 'play_rejected', stationuuid: this.lastStationUuid },
@@ -286,65 +362,84 @@ export class AudioEngine extends EventTarget {
     }
 
     this.reconnectAttempts++;
-    setTimeout(() => {
-      if (gen === this.generation && this.currentUrl) {
-        this.reconnect(this.currentUrl);
+    const url = this.currentUrl;
+    const timer = setTimeout(() => {
+      if (gen === this.generation && url && this.currentUrl === url) {
+        this.reconnect(url);
       }
     }, 350);
+    this.reconnectTimers.push(timer);
   }
 
-  private handleStall() {
+  private handleStall(el: HTMLAudioElement) {
+    if (this.isStale(el)) return;
+    if (this.stallTimer) return;
+
     this.dispatchEvent(new CustomEvent('buffering'));
-    this.clearStall();
 
     const gen = this.generation;
+    const url = this.currentUrl;
     this.stallTimer = setTimeout(() => {
-      if (gen !== this.generation || !this.currentUrl) return;
-      if (this.reconnectAttempts < 2 && this.currentUrl) {
-        this.reconnectAttempts++;
-        this.reconnect(this.currentUrl);
-      } else {
+      this.stallTimer = null;
+      if (gen !== this.generation || !url || this.currentUrl !== url) return;
+      const maxAttempts = this.everPlayed ? 6 : 2;
+      if (this.reconnectAttempts >= maxAttempts) {
         this.reconnecting = false;
+        this.playbackActive = false;
+        this.everPlayed = false;
+        this.reconnectAttempts = 0;
         this.dispatchEvent(
           new CustomEvent('failed', {
             detail: {
-              url: this.currentUrl,
+              url: url,
               reason: 'stall_timeout',
               stationuuid: this.lastStationUuid,
             },
           })
         );
+      } else {
+        this.reconnectAttempts++;
+        this.reconnect(url);
       }
-    }, 4500);
+    }, this.everPlayed ? 3000 : 4500);
   }
 
   private handleError(code?: number) {
     if (code === MediaError.MEDIA_ERR_ABORTED) return;
+    if (!this.currentUrl) return;
     const gen = this.generation;
-    if (this.reconnectAttempts < 2 && this.currentUrl) {
-      this.reconnectAttempts++;
-      setTimeout(() => {
-        if (gen === this.generation && this.currentUrl) {
-          this.reconnect(this.currentUrl);
-        }
-      }, 450);
-    } else {
+    const maxAttempts = this.everPlayed ? 6 : 2;
+    if (this.reconnectAttempts >= maxAttempts) {
       if (gen !== this.generation) return;
       this.reconnecting = false;
+      this.playbackActive = false;
+      this.everPlayed = false;
+      this.reconnectAttempts = 0;
       this.dispatchEvent(
         new CustomEvent('failed', {
           detail: {
             url: this.currentUrl,
             reason: 'audio_error',
-            code: this.audio.error?.code,
+            code,
             stationuuid: this.lastStationUuid,
           },
         })
       );
+      return;
     }
+
+    this.reconnectAttempts++;
+    const url = this.currentUrl;
+    const timer = setTimeout(() => {
+      if (gen === this.generation && url && this.currentUrl === url) {
+        this.reconnect(url);
+      }
+    }, 450);
+    this.reconnectTimers.push(timer);
   }
 
   private handleEnded() {
+    this.playbackActive = false;
     this.setPlaybackStateNone();
     this.dispatchEvent(new CustomEvent('ended', { detail: { stationuuid: this.lastStationUuid } }));
   }
@@ -354,61 +449,124 @@ export class AudioEngine extends EventTarget {
       clearTimeout(this.stallTimer);
       this.stallTimer = null;
     }
-    this.reconnectAttempts = 0;
+  }
+
+  private mediaPlay() {
+    if (!this.currentUrl) return;
+    if (this.playbackActive) return;
+    this.audio.play().catch((err) => this.handlePlayError(err));
+  }
+
+  private mediaPause() {
+    this.clearStall();
+    this.cancelReconnectTimers();
+    this.playbackActive = false;
+    this.audio.pause();
+    this.setPlaybackStatePaused();
+    this.dispatchEvent(new CustomEvent('paused'));
+  }
+
+  pause() {
+    if (!this.currentUrl) {
+      this.stop();
+      return;
+    }
+    this.clearStall();
+    this.cancelReconnectTimers();
+    this.playbackActive = false;
+    this.audio.pause();
+    this.setPlaybackStatePaused();
+    this.dispatchEvent(new CustomEvent('paused'));
+  }
+
+  async resume(): Promise<void> {
+    if (!this.currentUrl) return;
+    this.playbackActive = false;
+    try {
+      await this.audio.play();
+      this.playbackActive = true;
+      this.dispatchEvent(
+        new CustomEvent('playing', { detail: { url: this.currentUrl, stationuuid: this.lastStationUuid } })
+      );
+    } catch (err) {
+      this.handlePlayError(err);
+    }
+  }
+
+  getActiveUrl(): string | null {
+    return this.currentUrl;
   }
 
   stop() {
-    if (this.isFadingOut) {
-      this.audio.pause();
-    }
-    this.audio.pause();
+    this.generation++;
+    this.cancelCrossfade();
+    this.cancelReconnectTimers();
     this.clearStall();
-    this.setPlaybackStateNone();
-    this.currentUrl = null;
+    this.playbackActive = false;
     this.reconnecting = false;
+    this.currentUrl = null;
+    this.lastStationUuid = null;
+    this.pauseAudioOnly();
+    this.setPlaybackStateNone();
     this.dispatchEvent(new CustomEvent('stopped'));
+  }
+
+  private pauseAudioOnly() {
+    const el = this.audio;
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
   }
 
   dispose() {
     this.stop();
-    this.audio.src = '';
-    this.audio.load();
-    this.abortController?.abort();
-    this.abortController = null;
-    this.currentUrl = null;
-    this.reconnectAttempts = 0;
-    this.reconnecting = false;
+    this.teardownAudio(this.audio);
+    if (this.nativeListener) {
+      void this.nativeListener.unregister().catch(() => {});
+      this.nativeListener = null;
+    }
   }
 
   setVolume(vol: number) {
-    this.audio.volume = Math.max(0, Math.min(1, vol));
+    this.volume = Math.max(0, Math.min(1, vol));
+    const next = (el: HTMLAudioElement | null) => {
+      if (el && !this.isFadingOut) el.volume = this.volume;
+    };
+    next(this.audio);
+  }
+
+  getVolume(): number {
+    return this.volume;
   }
 
   fadeOut(durationMs: number): Promise<void> {
-    if (!this.isPlaying() || this.isFadingOut) return Promise.resolve();
-    const start = this.audio.volume;
+    if (this.isFadingOut || !this.playbackActive) return Promise.resolve();
+    const gen = this.generation;
+    const el = this.audio;
+    const start = Math.min(el.volume, this.volume || 1);
     const steps = 24;
     const intervalMs = Math.max(16, durationMs / steps);
     let step = 0;
     return new Promise<void>((resolve) => {
       const interval = setInterval(() => {
+        if (gen !== this.generation || el.__nostuGen !== this.generation) {
+          clearInterval(interval);
+          resolve();
+          return;
+        }
         step++;
-        this.audio.volume = start * (1 - step / steps);
+        el.volume = Math.max(0, start * (1 - step / steps));
         if (step >= steps) {
           clearInterval(interval);
-          this.audio.volume = 0;
+          el.volume = 0;
           resolve();
         }
       }, intervalMs);
     });
   }
 
-  getVolume(): number {
-    return this.audio.volume;
-  }
-
   isPlaying(): boolean {
-    return !this.audio.paused && !this.audio.ended;
+    return this.playbackActive && !this.audio.paused;
   }
 }
 

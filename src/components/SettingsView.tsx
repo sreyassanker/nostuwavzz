@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Globe2, Moon, Monitor, Palette, Play, Search, Sun, Trash2, WifiOff } from 'lucide-react';
+import { Moon, Monitor, Palette, Play, Search, Sun, Trash2, WifiOff, Plus, Download, Upload, Archive, X } from 'lucide-react';
 import { useStore, type Density, type ThemeMode } from '../store/store';
 import { clearStations } from '../lib/stationCache';
 import { clearCache as clearImageCache } from '../lib/imageCache';
 import { useSleepTimer } from '../lib/useSleepTimer';
+import type { Station as StationType } from '../types';
 
 const THEMES: { key: ThemeMode; label: string; icon: typeof Sun }[] = [
   { key: 'light', label: 'Light', icon: Sun },
@@ -80,6 +81,10 @@ export default function SettingsView() {
   const setAllStations = useStore((s) => s.setAllStations);
   const setCurrentStations = useStore((s) => s.setCurrentStations);
   const setTotalStationCount = useStore((s) => s.setTotalStationCount);
+  const myStations = useStore((s) => s.myStations);
+  const addMyStation = useStore((s) => s.addMyStation);
+  const removeMyStation = useStore((s) => s.removeMyStation);
+  const importData = useStore((s) => s.importData);
   const { handleSleep } = useSleepTimer();
 
   const handleClearStations = useCallback(async () => {
@@ -94,6 +99,90 @@ export default function SettingsView() {
     await clearImageCache();
     addToast('Image cache cleared', 'info');
   }, [addToast]);
+
+  const [myStationName, setMyStationName] = useState('');
+  const [myStationUrl, setMyStationUrl] = useState('');
+  const [myStationTags, setMyStationTags] = useState('');
+  const [myStationCountry, setMyStationCountry] = useState('');
+
+  const handleAddMyStation = useCallback(() => {
+    if (!myStationName.trim() || !myStationUrl.trim()) {
+      addToast('Name and URL required', 'error');
+      return;
+    }
+    try {
+      new URL(myStationUrl.trim());
+    } catch {
+      addToast('Invalid URL', 'error');
+      return;
+    }
+    const station: StationType = {
+      stationuuid: crypto.randomUUID(),
+      name: myStationName.trim(),
+      url: myStationUrl.trim(),
+      url_resolved: myStationUrl.trim(),
+      tags: myStationTags.trim() || undefined,
+      country: myStationCountry.trim() || undefined,
+      countrycode: myStationCountry.trim().toUpperCase() || undefined,
+      codec: 'MP3',
+      bitrate: 128,
+    };
+    addMyStation(station);
+    setMyStationName('');
+    setMyStationUrl('');
+    setMyStationTags('');
+    setMyStationCountry('');
+    addToast(`Added "${station.name}" to My Stations`);
+  }, [myStationName, myStationUrl, myStationTags, myStationCountry, addMyStation, addToast]);
+
+  const handleRemoveMyStation = useCallback(
+    (uuid: string) => {
+      removeMyStation(uuid);
+      addToast('Removed from My Stations');
+    },
+    [removeMyStation, addToast]
+  );
+
+  const handleExport = useCallback(() => {
+    const state = useStore.getState();
+    const exportData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      favorites: Array.from(state.favoriteUuids),
+      recentlyPlayed: state.recentlyPlayed,
+      myStations: state.myStations,
+      playStats: state.playStats,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nostu-wavzz-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast('Data exported');
+  }, [addToast]);
+
+  const handleImport = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target?.result as string);
+          if (data && typeof data === 'object') {
+            importData(data);
+            addToast('Data imported');
+          } else {
+            addToast('Invalid file format', 'error');
+          }
+        } catch {
+          addToast('Failed to parse file', 'error');
+        }
+      };
+      reader.readAsText(file);
+    },
+    [importData, addToast]
+  );
 
   const groups = useMemo<SettingGroup[]>(
     () => [
@@ -173,7 +262,7 @@ export default function SettingsView() {
       },
       {
         label: 'Station directory',
-        icon: <Globe2 size={14} strokeWidth={1.8} aria-hidden="true" />,
+        icon: <Download size={14} strokeWidth={1.8} aria-hidden="true" />,
         keyword: 'cache sync',
         rows: [
           {
@@ -300,6 +389,112 @@ export default function SettingsView() {
         ],
       },
       {
+        label: 'My Stations',
+        icon: <Archive size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'custom personal stations',
+        rows: [
+          {
+            title: 'Add station',
+            hint: 'Name and stream URL required. Tags and country optional.',
+            keyword: 'add custom station',
+            stack: true,
+            control: (
+              <div className="settings__my-station-form">
+                <input
+                  type="text"
+                  className="settings__input"
+                  placeholder="Station name"
+                  value={myStationName}
+                  onChange={(e) => setMyStationName(e.target.value)}
+                  aria-label="Station name"
+                />
+                <input
+                  type="url"
+                  className="settings__input"
+                  placeholder="Stream URL (e.g. https://stream.example.com/live.mp3)"
+                  value={myStationUrl}
+                  onChange={(e) => setMyStationUrl(e.target.value)}
+                  aria-label="Stream URL"
+                />
+                <input
+                  type="text"
+                  className="settings__input"
+                  placeholder="Tags (comma separated, e.g. rock, news)"
+                  value={myStationTags}
+                  onChange={(e) => setMyStationTags(e.target.value)}
+                  aria-label="Tags"
+                />
+                <input
+                  type="text"
+                  className="settings__input"
+                  placeholder="Country (e.g. United States)"
+                  value={myStationCountry}
+                  onChange={(e) => setMyStationCountry(e.target.value)}
+                  aria-label="Country"
+                />
+                <button type="button" className="btn-primary" onClick={handleAddMyStation}>
+                  <Plus size={13} strokeWidth={1.8} aria-hidden="true" />
+                  Add
+                </button>
+              </div>
+            ),
+          },
+          ...(myStations.length > 0
+            ? myStations.map((s) => ({
+                key: s.stationuuid,
+                title: s.name,
+                hint: `${s.country ?? ''} ${s.tags ?? ''}`,
+                keyword: s.name,
+                stack: true,
+                control: (
+                  <button
+                    type="button"
+                    className="settings__danger settings__danger--sm"
+                    onClick={() => handleRemoveMyStation(s.stationuuid)}
+                  >
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    Remove
+                  </button>
+                ),
+              }))
+            : []),
+        ],
+      },
+      {
+        label: 'Backup & Restore',
+        icon: <Upload size={14} strokeWidth={1.8} aria-hidden="true" />,
+        keyword: 'import export backup data',
+        rows: [
+          {
+            title: 'Export data',
+            hint: 'Downloads favorites, My Stations, recent, and play stats as JSON.',
+            keyword: 'export backup download',
+            stack: true,
+            control: (
+              <button type="button" className="btn-primary" onClick={handleExport}>
+                <Download size={13} strokeWidth={1.8} aria-hidden="true" />
+                Export
+              </button>
+            ),
+          },
+          {
+            title: 'Import data',
+            hint: 'Select a JSON file from a previous export.',
+            keyword: 'import restore backup',
+            stack: true,
+            control: (
+              <input
+                type="file"
+                className="settings__file-input"
+                accept="application/json"
+                onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
+                aria-label="Import data"
+              />
+            ),
+          },
+        ],
+      },
+      {
         label: 'About',
         keyword: 'info version',
         rows: [
@@ -345,6 +540,19 @@ export default function SettingsView() {
       setCrossfade,
       crossfadeDuration,
       setCrossfadeDuration,
+      myStations,
+      addMyStation,
+      removeMyStation,
+      myStationName,
+      myStationUrl,
+      myStationTags,
+      myStationCountry,
+      handleAddMyStation,
+      handleRemoveMyStation,
+      handleExport,
+      handleImport,
+      importData,
+      addToast,
     ]
   );
 

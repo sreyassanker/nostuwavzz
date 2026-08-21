@@ -1,3 +1,59 @@
+# Nostu Wavzz v3.0.0
+
+**Third public release of Nostu Wavzz** — global internet radio player with an interactive 3D globe.
+
+**50,000+ live stations** | **No account, no ads, no tracking** | **MIT licensed**
+
+---
+
+## 📥 Download
+
+| Platform | File | Size |
+|---|---|---|
+| **Android 7.0+** (arm64) | [nostu-wavzz-v3.0.0.apk](./nostu-wavzz-v3.0.0.apk) | 12.5 MB |
+
+### Install on Android
+1. Download the APK above.
+2. On your phone, open the file → Allow "Install from unknown sources" → Install.
+3. First launch will sync the 50K-station catalog in seconds.
+
+> **Note:** v3.0.0 keeps the same signing key as v0.2.0, so it installs as an in-place update over v0.2.0 (versionCode 3000000 > 2000). If you're on v0.1.0, uninstall first.
+
+---
+
+## What's new in v3.0.0
+
+### Playback engine rebuild
+- **Crossfade is now cancellable** — switching stations, pausing, or stopping mid-fade no longer lets the old stream "resume" after a stop or sleep timer fires
+- **Volume is honored during crossfade** — the fade never jumps to 100% volume anymore
+- **Stall recovery actually gives up** — a dead stream retries a bounded number of times, then shows "Station unavailable" instead of reconnecting forever
+- **Pause really pauses** — lock-screen / Bluetooth pause cancels pending reconnects so audio can't restart on its own
+- **Accurate play state** — the UI and lock screen no longer claim "playing" when a stream failed
+- **Pause & resume** — tapping play/pause now pauses your current station instead of tearing it down; resume works from the mini player, full player, and lock screen
+- **Recently played only records real plays** — failed stations no longer pollute the recent list
+- **Media session initialized on Android** — native lock-screen events now actually connect (`tauri-plugin-media-session`)
+- **Playback teardown on unmount** — no leaked timers or duplicate boots in dev (StrictMode-safe)
+
+### Sleep timer
+- Timer state clears after it fires, persisted timers survive page reloads without drifting, and timers are cleaned up on unmount
+
+### UI / layering
+- **Station Info panel fixed** — it's now portaled above everything (was painted *behind* the player and clipped by the virtual grid)
+- **Card ⋯ menu fixed** — portaled + smartly positioned; no longer clipped or hidden under the mini player
+- **Mini-player drag dead-zone fixed** — a short horizontal drag on the artwork now opens the full player instead of doing nothing
+- **Full player gestures** — swipe down to dismiss, swipe left/right to change stations
+- **Full player overflow** — sheet is scrollable on short/landscape screens instead of clipping
+- **Escape closes** the full player and info modal; full-player sleep menu closes on outside tap
+- **Settings & globe legend** no longer hidden behind the mini player on mobile; toasts no longer block taps
+- **Responsive station grid** — column count adapts to the panel width (2–4), and row height scales with the compact/normal/cozy density setting
+
+### Data & robustness
+- Completed syncs no longer wipe your active filters
+- Fixed stale-closure bugs in the "network restored" toast and boot completion state
+- Safer `localStorage` reads (private-mode safe) and consistent sleep-timer boot state
+
+---
+
 # Nostu Wavzz v0.2.0
 
 **Second public release of Nostu Wavzz** — global internet radio player with an interactive 3D globe.
@@ -85,10 +141,11 @@ npx tauri android build --target aarch64
 
 | | |
 |---|---|
-| **APK SHA-256** | `58F1D03DF8AB948B4C1F5C183D31CBA4EA8AA684D9E2EAF4692E0D910D1740B1` |
+| **APK SHA-256** | `CF922F5D8FB44B5DC7317F4391FEAAEB89A7B6945C46EBC82A87BC2DF6BFF6AE` |
 | **Min SDK** | 24 (Android 7.0) |
 | **Target SDK** | 36 (Android 16) |
 | **ABIs** | `arm64-v8a` |
+| **Signing** | APK Signature Scheme v2 + v3 |
 | **Permissions** | INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, WAKE_LOCK |
 
 > **Security note:** APK is self-signed with our release key (RSA-2048, SHA-256). Verify the fingerprint above matches after download. Never sideload from mirror sites.

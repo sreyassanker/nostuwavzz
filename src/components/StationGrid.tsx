@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Station } from '../types';
 import StationCard from './StationCard';
@@ -37,8 +37,31 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
   const initialSync = syncState.inProgress && totalStationCount === 0 && stations.length === 0;
   const recentlyPlayed = useStore((s) => s.recentlyPlayed);
   const showRecent = !hideFilters && !isFavoritesView && !hasFilters && recentlyPlayed.length > 0;
-  const COLUMNS = 3;
-  const ROW_HEIGHT = 116;
+
+  const density = useStore((s) => s.density);
+  const densityFactor = density === 'compact' ? 0.85 : density === 'cozy' ? 1.15 : 1;
+  const ROW_HEIGHT = Math.round(112 * densityFactor + 8);
+
+  const [columns, setColumns] = useState(3);
+  const showGrid = stations.length > 0 && !initialSync;
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const gap = 10;
+      const minCard = 148;
+      const width = el.clientWidth - 48;
+      const cols = Math.max(1, Math.min(4, Math.floor((width + gap) / (minCard + gap))));
+      setColumns(cols);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showGrid, filterQuery, selectedContinent, selectedTag, selectedCountry, favoritesOnly]);
+
+  const COLUMNS = columns;
   const rowCount = Math.ceil(stations.length / COLUMNS);
 
   const rowVirtualizer = useVirtualizer({
@@ -133,6 +156,7 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
                   style={{
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
+                    gridTemplateColumns: `repeat(${COLUMNS}, 1fr)`,
                   }}
                 >
                   {rowStations.map((s) => (

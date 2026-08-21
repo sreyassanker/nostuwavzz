@@ -66,7 +66,7 @@ export async function fetchAllStations(
 
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'NostuWavzz/2.0' },
+        headers: { 'User-Agent': 'NostuWavzz/3.0' },
         signal: AbortSignal.timeout(15000),
       });
 
