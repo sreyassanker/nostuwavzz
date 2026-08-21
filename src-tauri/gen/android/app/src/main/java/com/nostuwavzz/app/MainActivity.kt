@@ -17,40 +17,22 @@ class MainActivity : TauriActivity() {
     }
 
     /**
-     * When the app goes to background, prevent the WebView from pausing
-     * if audio is playing. The media-session plugin's foreground service
-     * keeps the process alive, but we also need the WebView's JS to keep
-     * running so the audio element doesn't stop.
+     * Always skip onPause to keep WebView alive for background audio.
+     * The foreground service handles process lifecycle.
      */
     override fun onPause() {
-        // Check if a foreground media service is running — if so,
-        // the media session is active and audio should keep playing.
-        // We skip super.onPause() to prevent WebView JS from being suspended.
-        if (app.tauri.mediasession.MediaSessionPlugin.isCurrentlyPlaying()) {
-            Log.d(TAG, "onPause: audio is playing — keeping activity alive")
-            // Do NOT call super.onPause() — this prevents the WebView from pausing.
-            // The foreground service keeps the process alive regardless.
-            return
-        }
-        super.onPause()
+        Log.d(TAG, "onPause: keeping activity alive for background playback")
+        return
     }
 
     /**
-     * Only stop the activity when the user explicitly navigates away
-     * (back button), not when they just switch apps.
+     * Always skip onStop to keep WebView alive in background.
      */
     override fun onStop() {
-        if (app.tauri.mediasession.MediaSessionPlugin.isCurrentlyPlaying()) {
-            Log.d(TAG, "onStop: audio is playing — not stopping activity")
-            // Skip super.onStop() to keep WebView alive in background
-            return
-        }
-        super.onStop()
+        Log.d(TAG, "onStop: keeping activity alive for background playback")
+        return
     }
 
-    /**
-     * Handle memory pressure gracefully — don't kill audio for moderate trim levels.
-     */
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         when {

@@ -71,3 +71,6 @@ Desktop.ini
 # Screenshots & temp files
 /Screenshots/
 docs/screenshots/viewer.html
+
+# Android build files
+BUILD_ANDROID.md

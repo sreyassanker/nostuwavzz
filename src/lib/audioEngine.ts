@@ -47,6 +47,7 @@ export class AudioEngine extends EventTarget {
   private isFadingOut = false;
   private playbackActive = false;
   private everPlayed = false;
+  private lastPlayStartedAt = 0;
   private failedDispatched = false;
   private volume = loadSavedVolume();
   private nativeListener: Awaited<ReturnType<typeof onAction>> | null = null;
@@ -315,6 +316,10 @@ export class AudioEngine extends EventTarget {
           this.mediaPlay();
           break;
         case 'pause':
+          // Ignore external pauses (e.g. transient audio-focus churn) that
+          // arrive immediately after we started playing — otherwise the very
+          // first play of a session gets killed seconds after it starts.
+          if (Date.now() - this.lastPlayStartedAt < 1500) break;
           this.mediaPause();
           break;
         case 'next':
@@ -424,6 +429,7 @@ export class AudioEngine extends EventTarget {
     this.playbackActive = false;
     this.everPlayed = false;
     this.failedDispatched = false;
+    this.lastPlayStartedAt = Date.now();
 
     if (station) {
       this.updateMediaMetadata(station);
