@@ -47,6 +47,7 @@ export class AudioEngine extends EventTarget {
   private isFadingOut = false;
   private playbackActive = false;
   private everPlayed = false;
+  private failedDispatched = false;
   private volume = loadSavedVolume();
   private nativeListener: Awaited<ReturnType<typeof onAction>> | null = null;
 
@@ -420,6 +421,7 @@ export class AudioEngine extends EventTarget {
     this.reconnecting = false;
     this.playbackActive = false;
     this.everPlayed = false;
+    this.failedDispatched = false;
 
     if (station) {
       this.updateMediaMetadata(station);
@@ -587,11 +589,14 @@ export class AudioEngine extends EventTarget {
       this.playbackActive = false;
       this.everPlayed = false;
       this.reconnectAttempts = 0;
-      this.dispatchEvent(
-        new CustomEvent('failed', {
-          detail: { url: this.currentUrl, reason: 'play_rejected', stationuuid: this.lastStationUuid },
-        })
-      );
+      if (!this.failedDispatched) {
+        this.failedDispatched = true;
+        this.dispatchEvent(
+          new CustomEvent('failed', {
+            detail: { url: this.currentUrl, reason: 'play_rejected', stationuuid: this.lastStationUuid },
+          })
+        );
+      }
       return;
     }
 
@@ -622,15 +627,18 @@ export class AudioEngine extends EventTarget {
         this.playbackActive = false;
         this.everPlayed = false;
         this.reconnectAttempts = 0;
-        this.dispatchEvent(
-          new CustomEvent('failed', {
-            detail: {
-              url: url,
-              reason: 'stall_timeout',
-              stationuuid: this.lastStationUuid,
-            },
-          })
-        );
+        if (!this.failedDispatched) {
+          this.failedDispatched = true;
+          this.dispatchEvent(
+            new CustomEvent('failed', {
+              detail: {
+                url: url,
+                reason: 'stall_timeout',
+                stationuuid: this.lastStationUuid,
+              },
+            })
+          );
+        }
       } else {
         this.reconnectAttempts++;
         this.reconnect(url);
@@ -649,16 +657,19 @@ export class AudioEngine extends EventTarget {
       this.playbackActive = false;
       this.everPlayed = false;
       this.reconnectAttempts = 0;
-      this.dispatchEvent(
-        new CustomEvent('failed', {
-          detail: {
-            url: this.currentUrl,
-            reason: 'audio_error',
-            code,
-            stationuuid: this.lastStationUuid,
-          },
-        })
-      );
+      if (!this.failedDispatched) {
+        this.failedDispatched = true;
+        this.dispatchEvent(
+          new CustomEvent('failed', {
+            detail: {
+              url: this.currentUrl,
+              reason: 'audio_error',
+              code,
+              stationuuid: this.lastStationUuid,
+            },
+          })
+        );
+      }
       return;
     }
 

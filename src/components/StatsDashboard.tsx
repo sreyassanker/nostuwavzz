@@ -34,7 +34,7 @@ export default function StatsDashboard({ onPlayStation }: { onPlayStation?: (s: 
   const unique = entries.length;
 
   const topByPlays = useMemo(() => [...entries].sort((a, b) => b[1].plays - a[1].plays).slice(0, 8), [entries]);
-  const topByTime = useMemo(() => [...entries].sort((a, b) => b[1].seconds - a[1].seconds).slice(0, 8), [entries]);
+
   const recent = useMemo(() => [...entries].sort((a, b) => b[1].lastPlayed - a[1].lastPlayed).slice(0, 6), [entries]);
 
   const byCountry = useMemo(() => {
@@ -56,7 +56,7 @@ export default function StatsDashboard({ onPlayStation }: { onPlayStation?: (s: 
   }, [allStations]);
 
   const maxPlays = topByPlays[0]?.[1].plays || 1;
-  const maxTime = topByTime[0]?.[1].seconds || 1;
+
   const maxCountryPlays = byCountry[0]?.plays || 1;
 
   if (entries.length === 0) {
@@ -135,31 +135,7 @@ export default function StatsDashboard({ onPlayStation }: { onPlayStation?: (s: 
         </div>
       </section>
 
-      {/* Top by time */}
-      <section className="stats-section">
-        <h3 className="stats-section__title"><Clock size={14} strokeWidth={1.8} aria-hidden="true" /> Top stations — by time</h3>
-        <div className="stats-list">
-          {topByTime.map(([uuid, v]) => {
-            const st = stationMap.get(uuid);
-            return (
-              <div key={uuid} className="stats-row" onClick={() => st && onPlayStation?.(st)} role={st ? 'button' : undefined}>
-                <div className="stats-row__art">
-                  {st ? <StationLogo station={st} size={36} /> : <span className="stats-row__fallback">{(v.name || '?')[0]}</span>}
-                </div>
-                <div className="stats-row__main">
-                  <div className="stats-row__name">{v.name}</div>
-                  <div className="stats-row__meta">{v.country || 'Unknown'}</div>
-                  <div className="stats-bar stats-bar--time"><span className="stats-bar__fill" style={{ width: `${Math.max(6, (v.seconds / maxTime) * 100)}%` }} /></div>
-                </div>
-                <div className="stats-row__side">
-                  <span className="stats-row__value">{formatSeconds(v.seconds)}</span>
-                  <span className="stats-row__unit">listened</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+
 
       {/* By country */}
       <section className="stats-section">

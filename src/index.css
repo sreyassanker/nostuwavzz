@@ -2389,6 +2389,8 @@ kbd {
   height: 100%;
   position: absolute;
   inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .panel--settings {

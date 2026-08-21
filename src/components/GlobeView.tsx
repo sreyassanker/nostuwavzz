@@ -7,12 +7,12 @@ import StationInfoModal from './StationInfoModal';
 import type { Station } from '../types';
 
 const CONTINENT_COLORS: Record<string, string> = {
-  'N. America': '#6BB8E0',
-  'S. America': '#E87878',
-  'Europe': '#7AAFCF',
-  'Africa': '#7CB342',
-  'Asia': '#E06B8E',
-  'Oceania': '#B39DDB',
+  'N. America': '#4FC3F7',   // bright cyan-blue
+  'S. America': '#FF7043',   // vivid coral-orange
+  'Europe': '#AB47BC',       // rich purple
+  'Africa': '#66BB6A',       // vibrant green
+  'Asia': '#EF5350',         // strong red
+  'Oceania': '#FFA726',      // warm amber
 };
 
 const COUNTRY_COORDS: Record<string, [number, number, number?]> = {
@@ -231,6 +231,7 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
   const ndcRef = useRef(new THREE.Vector2());
   const hitVecRef = useRef(new THREE.Vector3());
   const glowLayerRef = useRef<THREE.InstancedMesh | null>(null);
+  const sunRafRef = useRef<number>(0);
 
   const [metadataStation, setMetadataStation] = useState<Station | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -385,6 +386,7 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
         tooltipElRef.current.remove();
         tooltipElRef.current = null;
       }
+      cancelAnimationFrame(sunRafRef.current);
     };
   }, []);
 
@@ -407,36 +409,37 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
     const continent = getContinent(lat, lng);
     const hex = CONTINENT_COLORS[continent] || '#ff4d6d';
 
-    // Convert hex → rgb components
+    // Brighten the color for better visibility on dark globe
     const c = new THREE.Color(hex);
-    const r = Math.round(c.r * 255);
-    const g = Math.round(c.g * 255);
-    const b = Math.round(c.b * 255);
+    const bright = new THREE.Color().copy(c).offsetHSL(0, 0.1, 0.25);
+    const r = Math.round(bright.r * 255);
+    const g = Math.round(bright.g * 255);
+    const b = Math.round(bright.b * 255);
 
     return [
       {
         lat,
         lng,
         color: `rgba(${r},${g},${b},1)`,
-        maxRadius: 6,
+        maxRadius: 12,
         speed: 3,
-        repeatPeriod: 1200,
+        repeatPeriod: 1400,
       },
       {
         lat,
         lng,
-        color: `rgba(${r},${g},${b},0.75)`,
-        maxRadius: 10,
+        color: `rgba(${r},${g},${b},0.85)`,
+        maxRadius: 22,
         speed: 2,
-        repeatPeriod: 1800,
+        repeatPeriod: 2000,
       },
       {
         lat,
         lng,
-        color: `rgba(${r},${g},${b},0.45)`,
-        maxRadius: 15,
+        color: `rgba(${r},${g},${b},0.6)`,
+        maxRadius: 34,
         speed: 1.5,
-        repeatPeriod: 2500,
+        repeatPeriod: 2800,
       },
     ];
   }, [playerStation]);
@@ -516,11 +519,8 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
         const p = data[i];
         const isActive = p.station.stationuuid === activeUuidRef.current;
         const colorStr = isActive ? '#ff4d6d' : p.baseColor;
-        const scale = isActive ? POINT_RADIUS * 2.2 : POINT_RADIUS * 1.4;
-        // Glow sphere is only ~1.35x — just slightly larger so
-        // only the back-facing edges peek around the main sphere,
-        // creating a rim/backlight rim effect.
-        const glowScale = isActive ? scale * 1.6 : scale * 1.35;
+        const scale = isActive ? POINT_RADIUS * 3.0 : POINT_RADIUS * 1.1;
+        const glowScale = isActive ? scale * 1.6 : scale * 1.25;
 
         const pos = latLngToVector3(p.lat, p.lng, REL_ALT);
 
@@ -529,12 +529,19 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
-        mesh.setColorAt(i, tmpCol.set(colorStr));
 
-        // Glow rim — active gets a wider, brighter rim
+        // Active: bright vivid white-pink — stands out from all continent colors
+        // Inactive: use vivid continent color at full brightness
+        if (isActive) {
+          mesh.setColorAt(i, tmpCol.set('#ffffff'));
+        } else {
+          mesh.setColorAt(i, tmpCol.set(colorStr));
+        }
+
+        // Glow rim — active gets a wide, bright hot-pink rim; inactive uses continent color
         const glowColor = isActive
-          ? tmpCol.clone().offsetHSL(0, -0.1, 0.25) // lighten for extra brightness
-          : tmpCol.clone();
+          ? tmpCol.set('#ff4d6d').offsetHSL(0, 0, 0.2)
+          : tmpCol.set(colorStr).offsetHSL(0, 0, -0.1);
         dummy.scale.setScalar(glowScale);
         dummy.updateMatrix();
         glowMesh.setMatrixAt(i, dummy.matrix);
@@ -572,8 +579,20 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
       controls.minDistance = 110;
       controls.maxDistance = 500;
 
-      // Start zoomed out so the full globe is visible
-      globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 3.5 });
+      // Fly to active station if one exists, otherwise show full globe
+      const activeUuid = useStore.getState().activeStationUuid;
+      const allStations = useStore.getState().allStations;
+      const active = activeUuid ? allStations.find((s) => s.stationuuid === activeUuid) : null;
+      if (active) {
+        const coords = getStationCoords(active);
+        if (coords) {
+          globeRef.current.pointOfView({ lat: coords.lat, lng: coords.lng, altitude: 3.5 }, 0);
+        } else {
+          globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 3.5 }, 0);
+        }
+      } else {
+        globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 3.5 }, 0);
+      }
     }
 
     const scene = globeRef.current?.scene();
@@ -607,6 +626,30 @@ const GlobeView = memo(function GlobeView({ stations, onStationClick }: GlobeVie
       });
       childrenToRemove.forEach((c) => scene.remove(c));
 
+      // --- Live shadow: sun position matches real-world UTC time ---
+      // Earth rotates 360° in 24h → 2π rad / 86,400,000 ms ≈ 7.27e-8 rad/ms
+      if (dirLight) {
+        const sunRadius = 10;
+        const REAL_TIME_SPEED = (2 * Math.PI) / 86_400_000; // real earth rotation
+        // Start at the current actual sun longitude
+        // UTC hour 0 → sun at lng=90 (noon at ~90°E), offset by π/2
+        const now = new Date();
+        const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+        const initialAngle = (utcHours / 24) * 2 * Math.PI - Math.PI / 2;
+        const startTime = performance.now();
+
+        const animateSun = (time: number) => {
+          const elapsed = time - startTime;
+          const angle = initialAngle + elapsed * REAL_TIME_SPEED;
+          dirLight.position.set(
+            Math.cos(angle) * sunRadius,
+            3,
+            Math.sin(angle) * sunRadius
+          );
+          sunRafRef.current = requestAnimationFrame(animateSun);
+        };
+        sunRafRef.current = requestAnimationFrame(animateSun);
+      }
     }
 
     // Build circle points layers once the globe is ready

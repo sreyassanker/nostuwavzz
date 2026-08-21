@@ -399,6 +399,9 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {}
   },
   addToast: (message, type = 'info') => {
+    // Deduplicate: if a toast with the same message already exists, skip
+    const current = get().toasts;
+    if (current.some((t) => t.message === message)) return;
     const id = `toast-${++toastCounter}`;
     set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
     setTimeout(() => {
