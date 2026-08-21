@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import { useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store/store';
 import { audioEngine } from './lib/audioEngine';
@@ -9,6 +9,12 @@ import { getFaviconWithCache } from './lib/imageCache';
 import { extractDominantColor } from './lib/colorExtract';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useTheme } from './lib/useTheme';
+import {
+  startMetadataMonitor,
+  stopMetadataMonitor,
+  onMetadataUpdate,
+  probeStation,
+} from './lib/metadata';
 import type { Station } from './types';
 import Header from './components/Header';
 import StationGrid from './components/StationGrid';
@@ -17,6 +23,9 @@ import SearchModal from './components/SearchModal';
 import ToastContainer from './components/Toast';
 import MobileTabBar from './components/MobileTabBar';
 import SettingsView from './components/SettingsView';
+import StatsDashboard from './components/StatsDashboard';
+import MiniOverlay from './components/MiniOverlay';
+const GlobeView = lazy(() => import('./components/GlobeView'));
 
 
 let worker: Worker | null = null;
@@ -342,6 +351,8 @@ export default function App() {
       setPlayer({ currentStation: station, isPlaying: true });
       if (isMobile) setPlayerOpen(true);
 
+      useStore.getState().setNowPlaying(null);
+      void stopMetadataMonitor().then(() => startMetadataMonitor(url, station.stationuuid));
       void audioEngine.play(url, station.stationuuid, station);
     },
     [currentStation, isMobile, setActiveStationUuid, setPlayer, setPlayerOpen]
@@ -406,9 +417,34 @@ export default function App() {
     return false;
   }, [handleStationClick]);
 
+  // Live now-playing metadata events (ICY / Icecast / Shoutcast)
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    onMetadataUpdate((meta) => {
+      const state = useStore.getState();
+      if (meta.stationuuid !== state.activeStationUuid) return;
+      state.setNowPlaying(meta);
+      audioEngine.updateLiveMetadata(meta.title, meta.artist);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   // Audio event listeners
   useEffect(() => {
     const onFailed = (_e: Event) => {
+      const url = audioEngine.getActiveUrl();
+      const uuid = useStore.getState().activeStationUuid;
+      if (url && uuid) {
+        void probeStation(url, uuid).catch(() => {});
+      }
+      void stopMetadataMonitor();
+      useStore.getState().setNowPlaying(null);
       if (advanceQueue()) return;
       setPlayer({ isPlaying: false });
       addToast('Station unavailable', 'error');
@@ -426,8 +462,14 @@ export default function App() {
       }
     };
     const onPaused = () => setPlayer({ isPlaying: false });
-    const onStopped = () => setPlayer({ isPlaying: false });
+    const onStopped = () => {
+      void stopMetadataMonitor();
+      useStore.getState().setNowPlaying(null);
+      setPlayer({ isPlaying: false });
+    };
     const onEnded = () => {
+      void stopMetadataMonitor();
+      useStore.getState().setNowPlaying(null);
       if (advanceQueue()) return;
       setPlayer({ isPlaying: false });
     };
@@ -507,6 +549,29 @@ export default function App() {
   return (
     <div className="app-shell">
       <Header onSync={handleSync} isMobile={isMobile} />
+      {/* Desktop tab strip */}
+      {!isMobile && (
+        <nav className="desktop-tabs" aria-label="Sections">
+          {([
+            ['discover', 'Discover'],
+            ['globe', 'Globe'],
+            ['favorites', 'Favorites'],
+            ['mine', 'My Stations'],
+            ['stats', 'Stats'],
+            ['settings', 'Settings'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`desktop-tabs__item ${activeTab === key ? 'is-active' : ''}`}
+              onClick={() => useStore.getState().setActiveTab(key)}
+              aria-current={activeTab === key ? 'page' : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       {isMobile ? (
         <>
           <main className="main main--mobile">
@@ -526,6 +591,21 @@ export default function App() {
                     onClearFilters={handleClearFilters}
                     onSync={handleSync}
                   />
+                </motion.section>
+              )}
+
+              {activeTab === 'globe' && (
+                <motion.section
+                  key="tab-globe"
+                  className="panel panel--globe"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Suspense fallback={<div className="globe-loading">Loading 3D globe…</div>}>
+                    <GlobeView stations={allStations} onStationClick={handleStationClick} />
+                  </Suspense>
                 </motion.section>
               )}
 
@@ -567,6 +647,18 @@ export default function App() {
                   />
                 </motion.section>
               )}
+              {activeTab === 'stats' && (
+                <motion.section
+                  key="tab-stats"
+                  className="panel panel--grid panel--settings"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <StatsDashboard onPlayStation={handleStationClick} />
+                </motion.section>
+              )}
               {activeTab === 'settings' && (
                 <motion.section
                   key="tab-settings"
@@ -585,20 +677,63 @@ export default function App() {
         </>
       ) : (
         <main className="main">
-          <section className="panel panel--grid" id="grid-panel">
-            <StationGrid
-              stations={myStationsOnly ? myStations : currentStations}
-              onStationClick={handleStationClick}
-              onClearFilters={handleClearFilters}
-              onSync={handleSync}
-              titleOverride={myStationsOnly ? 'My Stations' : undefined}
-              hideFilters={myStationsOnly}
-            />
-          </section>
-
+          {activeTab === 'discover' && (
+            <section className="panel panel--grid" id="grid-panel">
+              <StationGrid
+                stations={myStationsOnly ? myStations : currentStations}
+                onStationClick={handleStationClick}
+                onClearFilters={handleClearFilters}
+                onSync={handleSync}
+                titleOverride={myStationsOnly ? 'My Stations' : undefined}
+                hideFilters={myStationsOnly}
+              />
+            </section>
+          )}
+          {activeTab === 'globe' && (
+            <section className="panel panel--globe" id="globe-panel">
+              <Suspense fallback={<div className="globe-loading">Loading 3D globe…</div>}>
+                <GlobeView stations={allStations} onStationClick={handleStationClick} />
+              </Suspense>
+            </section>
+          )}
+          {activeTab === 'favorites' && (
+            <section className="panel panel--grid" id="grid-panel">
+              <StationGrid
+                stations={favoriteStations}
+                onStationClick={handleStationClick}
+                onClearFilters={handleClearFilters}
+                onSync={handleSync}
+                titleOverride="Favorites"
+                hideFilters
+              />
+            </section>
+          )}
+          {activeTab === 'mine' && (
+            <section className="panel panel--grid" id="grid-panel">
+              <StationGrid
+                stations={myStations}
+                onStationClick={handleStationClick}
+                onClearFilters={handleClearFilters}
+                onSync={handleSync}
+                titleOverride="My Stations"
+                hideFilters
+              />
+            </section>
+          )}
+          {activeTab === 'stats' && (
+            <section className="panel panel--grid panel--settings" id="stats-panel">
+              <StatsDashboard onPlayStation={handleStationClick} />
+            </section>
+          )}
+          {activeTab === 'settings' && (
+            <section className="panel panel--grid panel--settings" id="settings-panel">
+              <SettingsView />
+            </section>
+          )}
         </main>
       )}
       <PlayerSheet onPrev={handlePrev} onNext={handleNext} onPlayStation={handleStationClick} />
+      <MiniOverlay onPrev={handlePrev} onNext={handleNext} />
       <SearchModal onSelect={handleStationClick} />
       <ToastContainer />
     </div>

@@ -1,5 +1,5 @@
 import type { Station } from '../types';
-import { useStore } from '../store/store';
+import { useStore, EQ_FREQUENCIES } from '../store/store';
 import {
   updateState,
   onAction,
@@ -12,6 +12,7 @@ export type MediaActionHandler = () => void;
 
 const CROSSFADE_STEPS = 24;
 const VOLUME_KEY = 'radio.volume';
+const EQ_Q = 1;
 
 function loadSavedVolume(): number {
   try {
@@ -49,6 +50,17 @@ export class AudioEngine extends EventTarget {
   private volume = loadSavedVolume();
   private nativeListener: Awaited<ReturnType<typeof onAction>> | null = null;
 
+  // Web Audio graph
+  private audioCtx: AudioContext | null = null;
+  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private gainNode: GainNode | null = null;
+  private eqFilters: BiquadFilterNode[] = [];
+  private bassNode: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+  private panner: StereoPannerNode | null = null;
+  private webAudioEnabled = false;
+
   private crossfadeMs(): number {
     const { crossfadeDuration } = useStore.getState();
     return crossfadeDuration * 1000;
@@ -56,6 +68,13 @@ export class AudioEngine extends EventTarget {
 
   private crossfadeEnabled(): boolean {
     return useStore.getState().crossfade;
+  }
+
+  private bufferStallMs(): number {
+    const preset = useStore.getState().bufferPreset;
+    if (preset === 'low') return this.everPlayed ? 1500 : 2500;
+    if (preset === 'high') return this.everPlayed ? 6000 : 8000;
+    return this.everPlayed ? 3000 : 4500;
   }
 
   constructor() {
@@ -68,9 +87,192 @@ export class AudioEngine extends EventTarget {
     }
   }
 
+  // ── Web Audio helpers ──────────────────────────────────────
+
+  private ensureAudioContext(): void {
+    if (this.audioCtx) {
+      if (this.audioCtx.state === 'suspended') void this.audioCtx.resume().catch(() => {});
+      return;
+    }
+    try {
+      const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      if (!Ctx) return;
+      this.audioCtx = new Ctx();
+      this.gainNode = this.audioCtx.createGain();
+      this.gainNode.gain.value = this.volume;
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.78;
+      this.analyser.connect(this.audioCtx.destination);
+      // gain -> analyser already? We'll connect chain later
+      this.gainNode.connect(this.analyser);
+      // EQ filters
+      this.eqFilters = EQ_FREQUENCIES.map((freq) => {
+        const f = this.audioCtx!.createBiquadFilter();
+        f.type = 'peaking';
+        f.frequency.value = freq;
+        f.Q.value = EQ_Q;
+        f.gain.value = 0;
+        return f;
+      });
+      // Bass boost (low shelf at 120 Hz)
+      this.bassNode = this.audioCtx.createBiquadFilter();
+      this.bassNode.type = 'lowshelf';
+      this.bassNode.frequency.value = 120;
+      this.bassNode.gain.value = 0;
+      // Compressor (night mode)
+      this.compressor = this.audioCtx.createDynamicsCompressor();
+      this.compressor.threshold.value = -24;
+      this.compressor.knee.value = 30;
+      this.compressor.ratio.value = 8;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+      // Stereo panner (spatial)
+      try {
+        this.panner = this.audioCtx.createStereoPanner();
+      } catch {
+        this.panner = null;
+      }
+      this.applyEqGains();
+      this.applyBassBoost();
+      this.webAudioEnabled = true;
+    } catch {
+      this.webAudioEnabled = false;
+    }
+  }
+
+  private attachWebAudio(el: HTMLAudioElement): void {
+    if (!this.webAudioEnabled && !this.audioCtx) {
+      this.ensureAudioContext();
+    }
+    if (!this.audioCtx || !this.gainNode || !this.analyser) return;
+    // Resume if suspended (user gesture context)
+    if (this.audioCtx.state === 'suspended') void this.audioCtx.resume().catch(() => {});
+    // Disconnect previous source
+    if (this.sourceNode) {
+      try { this.sourceNode.disconnect(); } catch {}
+      this.sourceNode = null;
+    }
+    try {
+      // Must set crossOrigin before source creation / playback
+      el.crossOrigin = 'anonymous';
+      this.sourceNode = this.audioCtx.createMediaElementSource(el);
+      this.rebuildGraph();
+    } catch {
+      // CORS or already connected — disable Web Audio for this element
+      this.webAudioEnabled = false;
+      if (this.sourceNode) { try { this.sourceNode.disconnect(); } catch {} this.sourceNode = null; }
+    }
+  }
+
+  private rebuildGraph(): void {
+    if (!this.audioCtx || !this.sourceNode || !this.gainNode || !this.analyser) return;
+    try { this.sourceNode.disconnect(); } catch {}
+    this.eqFilters.forEach((f) => { try { f.disconnect(); } catch {} });
+    if (this.bassNode) try { this.bassNode.disconnect(); } catch {}
+    if (this.compressor) try { this.compressor.disconnect(); } catch {}
+    if (this.panner) try { this.panner.disconnect(); } catch {}
+    try { this.gainNode.disconnect(); } catch {}
+
+    const { eqEnabled, bassBoost, nightMode, spatialEnabled } = useStore.getState();
+    let last: AudioNode = this.sourceNode;
+
+    // EQ chain
+    if (eqEnabled && this.eqFilters.length) {
+      for (let i = 0; i < this.eqFilters.length; i++) {
+        last.connect(this.eqFilters[i]);
+        last = this.eqFilters[i];
+      }
+    }
+
+    // Bass boost
+    if (bassBoost && this.bassNode) {
+      last.connect(this.bassNode);
+      last = this.bassNode;
+    }
+
+    // Night mode compressor
+    if (nightMode && this.compressor) {
+      last.connect(this.compressor);
+      last = this.compressor;
+    }
+
+    // Spatial — subtle stereo widening via panner
+    if (spatialEnabled && this.panner) {
+      // Slight pan modulation left/right based on time? Static 0 keeps chain but enables future LFO
+      last.connect(this.panner);
+      last = this.panner;
+    }
+
+    last.connect(this.gainNode);
+    this.gainNode.connect(this.analyser);
+    this.analyser.connect(this.audioCtx.destination);
+    // Keep element volume at 1 when routed via graph (element volume not reflected in MediaElementSource)
+    // Volume now controlled via gainNode
+    this.gainNode.gain.value = this.volume;
+  }
+
+  private detachWebAudio(): void {
+    if (this.sourceNode) {
+      try { this.sourceNode.disconnect(); } catch {}
+      this.sourceNode = null;
+    }
+  }
+
+  private applyEqGains(): void {
+    const gains = useStore.getState().eqGains;
+    this.eqFilters.forEach((f, i) => {
+      f.gain.value = gains[i] ?? 0;
+    });
+  }
+
+  private applyBassBoost(): void {
+    if (!this.bassNode) return;
+    this.bassNode.gain.value = useStore.getState().bassBoost ? 10 : 0;
+  }
+
+  // Public controls for UI
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser && this.webAudioEnabled ? this.analyser : null;
+  }
+
+  isWebAudioActive(): boolean {
+    return this.webAudioEnabled && !!this.analyser;
+  }
+
+  setEqGains(gains: number[]): void {
+    gains.forEach((v, i) => {
+      if (this.eqFilters[i]) this.eqFilters[i].gain.value = v;
+    });
+  }
+
+  setEqGain(index: number, value: number): void {
+    if (this.eqFilters[index]) this.eqFilters[index].gain.value = value;
+  }
+
+  setEqEnabled(enabled: boolean): void {
+    this.rebuildGraph();
+    void enabled;
+  }
+
+  setBassBoost(): void { this.rebuildGraph(); }
+  setSpatialEnabled(): void { this.rebuildGraph(); }
+  setNightMode(): void { this.rebuildGraph(); }
+
+  setVisualizerEnabled(enabled: boolean): void {
+    if (!enabled) this.analyser = null;
+    else if (!this.analyser && this.audioCtx) {
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.78;
+      this.rebuildGraph();
+    }
+  }
+
   private createAudioElement(): HTMLAudioElement {
     const el = new Audio();
     el.preload = 'auto';
+    el.crossOrigin = 'anonymous';
 
     el.addEventListener('stalled', () => this.handleStall(el));
     el.addEventListener('waiting', () => this.handleStall(el));
@@ -179,6 +381,13 @@ export class AudioEngine extends EventTarget {
     }
   }
 
+  updateLiveMetadata(title: string, artist?: string | null) {
+    const station = useStore.getState().player.currentStation;
+    if (!station) return;
+    const display = artist ? `${artist} - ${title}` : title;
+    this.updateMediaMetadata({ ...station, name: display, country: artist || station.country });
+  }
+
   private handlePlaying(el: HTMLAudioElement) {
     if (el.__nostuGen !== this.generation) return;
     this.clearStall();
@@ -187,6 +396,7 @@ export class AudioEngine extends EventTarget {
     this.everPlayed = true;
     this.playbackActive = true;
     this.setPlaybackStatePlaying();
+    if (this.audioCtx?.state === 'suspended') void this.audioCtx.resume().catch(() => {});
     this.dispatchEvent(
       new CustomEvent('playing', { detail: { url: this.currentUrl, stationuuid: this.lastStationUuid } })
     );
@@ -215,6 +425,9 @@ export class AudioEngine extends EventTarget {
       this.updateMediaMetadata(station);
     }
 
+    // Ensure Web Audio context is primed on user gesture
+    this.ensureAudioContext();
+
     if (wasPlaying && this.audio.src && this.crossfadeEnabled()) {
       this.beginCrossfade(url);
     } else {
@@ -231,7 +444,13 @@ export class AudioEngine extends EventTarget {
     el.load();
     el.src = url;
     el.load();
-    el.volume = this.volume;
+    if (this.webAudioEnabled && this.gainNode) {
+      el.volume = 1;
+      this.gainNode.gain.value = this.volume;
+    } else {
+      el.volume = this.volume;
+    }
+    this.attachWebAudio(el);
     try {
       void el.play().catch((err) => this.handlePlayError(err));
     } catch {
@@ -242,6 +461,8 @@ export class AudioEngine extends EventTarget {
   private beginCrossfade(newUrl: string) {
     const oldAudio = this.audio;
     const gen = this.generation;
+    // Detach old element from graph — crossfade via element volume for reliability
+    this.detachWebAudio();
     const newAudio = this.createAudioElement();
     newAudio.__nostuGen = gen;
     newAudio.volume = 0;
@@ -283,6 +504,12 @@ export class AudioEngine extends EventTarget {
         this.oldAudio = null;
         this.teardownAudio(oldAudio);
         newAudio.volume = targetVolume;
+        // Re-attach Web Audio to the new element after crossfade
+        if (this.webAudioEnabled) {
+          this.attachWebAudio(newAudio);
+          if (this.gainNode) this.gainNode.gain.value = targetVolume;
+          newAudio.volume = 1;
+        }
         newAudio.play().catch((err) => this.handlePlayError(err));
         this.playbackActive = true;
       } else {
@@ -329,7 +556,14 @@ export class AudioEngine extends EventTarget {
     el.load();
     el.src = url;
     el.load();
-    el.volume = this.volume;
+    if (this.webAudioEnabled && this.gainNode) {
+      el.volume = 1;
+      this.gainNode.gain.value = this.volume;
+    } else {
+      el.volume = this.volume;
+    }
+    // Re-attach graph after src swap
+    this.attachWebAudio(el);
     el.play()
       .then(() => {
         if (gen === this.generation) this.reconnecting = false;
@@ -401,7 +635,7 @@ export class AudioEngine extends EventTarget {
         this.reconnectAttempts++;
         this.reconnect(url);
       }
-    }, this.everPlayed ? 3000 : 4500);
+    }, this.bufferStallMs());
   }
 
   private handleError(code?: number) {
@@ -454,6 +688,7 @@ export class AudioEngine extends EventTarget {
   private mediaPlay() {
     if (!this.currentUrl) return;
     if (this.playbackActive) return;
+    if (this.audioCtx?.state === 'suspended') void this.audioCtx.resume().catch(() => {});
     this.audio.play().catch((err) => this.handlePlayError(err));
   }
 
@@ -482,6 +717,7 @@ export class AudioEngine extends EventTarget {
   async resume(): Promise<void> {
     if (!this.currentUrl) return;
     this.playbackActive = false;
+    if (this.audioCtx?.state === 'suspended') void this.audioCtx.resume().catch(() => {});
     try {
       await this.audio.play();
       this.playbackActive = true;
@@ -506,6 +742,7 @@ export class AudioEngine extends EventTarget {
     this.reconnecting = false;
     this.currentUrl = null;
     this.lastStationUuid = null;
+    this.detachWebAudio();
     this.pauseAudioOnly();
     this.setPlaybackStateNone();
     this.dispatchEvent(new CustomEvent('stopped'));
@@ -521,6 +758,10 @@ export class AudioEngine extends EventTarget {
   dispose() {
     this.stop();
     this.teardownAudio(this.audio);
+    if (this.audioCtx) {
+      try { this.audioCtx.close(); } catch {}
+      this.audioCtx = null;
+    }
     if (this.nativeListener) {
       void this.nativeListener.unregister().catch(() => {});
       this.nativeListener = null;
@@ -529,10 +770,15 @@ export class AudioEngine extends EventTarget {
 
   setVolume(vol: number) {
     this.volume = Math.max(0, Math.min(1, vol));
-    const next = (el: HTMLAudioElement | null) => {
-      if (el && !this.isFadingOut) el.volume = this.volume;
-    };
-    next(this.audio);
+    if (this.webAudioEnabled && this.gainNode && !this.isFadingOut) {
+      try { this.gainNode.gain.value = this.volume; } catch {}
+      this.audio.volume = 1;
+    } else {
+      const next = (el: HTMLAudioElement | null) => {
+        if (el && !this.isFadingOut) el.volume = this.volume;
+      };
+      next(this.audio);
+    }
   }
 
   getVolume(): number {
@@ -541,6 +787,26 @@ export class AudioEngine extends EventTarget {
 
   fadeOut(durationMs: number): Promise<void> {
     if (this.isFadingOut || !this.playbackActive) return Promise.resolve();
+    // Prefer gainNode fade when Web Audio is active
+    if (this.webAudioEnabled && this.gainNode && this.audioCtx) {
+      const gen = this.generation;
+      const gain = this.gainNode.gain;
+      const start = gain.value;
+      try {
+        gain.cancelScheduledValues(this.audioCtx.currentTime);
+        gain.setValueAtTime(start, this.audioCtx.currentTime);
+        gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + durationMs / 1000);
+      } catch {
+        gain.value = 0;
+      }
+      return new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (gen !== this.generation) { resolve(); return; }
+          try { gain.value = 0; } catch {}
+          resolve();
+        }, durationMs + 30);
+      });
+    }
     const gen = this.generation;
     const el = this.audio;
     const start = Math.min(el.volume, this.volume || 1);

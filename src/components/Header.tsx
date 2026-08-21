@@ -1,5 +1,5 @@
 import { useStore } from '../store/store';
-import { Heart, RefreshCw, Radio } from 'lucide-react';
+import { Heart, RefreshCw, Radio, PictureInPicture2 } from 'lucide-react';
 
 interface HeaderProps {
   onSync: () => void;
@@ -28,6 +28,8 @@ export default function Header({ onSync, isMobile }: HeaderProps) {
   const isPlaying = useStore((s) => s.player.isPlaying);
   const syncState = useStore((s) => s.sync);
   const totalCount = useStore((s) => s.totalStationCount);
+  const miniOpen = useStore((s) => s.miniOverlayOpen);
+  const setMiniOverlayOpen = useStore((s) => s.setMiniOverlayOpen);
 
   const lastSyncAgo = timeAgo(syncState.lastSync);
 
@@ -89,6 +91,16 @@ export default function Header({ onSync, isMobile }: HeaderProps) {
             </button>
           </>
         )}
+        <button
+          type="button"
+          className={`header-fav-btn ${miniOpen ? 'is-active' : ''}`}
+          onClick={() => setMiniOverlayOpen(!miniOpen)}
+          title={miniOpen ? 'Hide mini player' : 'Pop out mini player'}
+          aria-label="Toggle mini player"
+          aria-pressed={miniOpen}
+        >
+          <PictureInPicture2 size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
         <span className="on-air-badge" hidden={!isPlaying || !currentStation}>
           <span className="on-air-dot" />
           <span className="on-air-name">{currentStation?.name}</span>

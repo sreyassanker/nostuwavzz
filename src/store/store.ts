@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Station } from '../types';
+import type { NowPlaying } from '../lib/metadata';
 
 interface Toast {
   id: string;
@@ -21,9 +22,10 @@ interface SyncState {
   lastSync: string | null;
 }
 
-export type ActiveTab = 'discover' | 'favorites' | 'settings' | 'mine';
+export type ActiveTab = 'discover' | 'favorites' | 'settings' | 'mine' | 'globe' | 'stats';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Density = 'compact' | 'normal' | 'cozy';
+export type BufferPreset = 'low' | 'balanced' | 'high';
 
 export interface PlayStatEntry {
   plays: number;
@@ -72,6 +74,16 @@ interface AppState {
   myStations: Station[];
   myStationsOnly: boolean;
   playStats: PlayStats;
+  nowPlaying: NowPlaying | null;
+  eqEnabled: boolean;
+  eqGains: number[];
+  eqPreset: string;
+  bassBoost: boolean;
+  spatialEnabled: boolean;
+  nightMode: boolean;
+  bufferPreset: BufferPreset;
+  visualizerEnabled: boolean;
+  miniOverlayOpen: boolean;
 
   setAllStations: (stations: Station[]) => void;
   setCurrentStations: (stations: Station[]) => void;
@@ -112,6 +124,17 @@ interface AppState {
   incrementPlay: (station: Station) => void;
   addPlayTime: (uuid: string, seconds: number) => void;
   resetPlayStats: () => void;
+  setNowPlaying: (meta: NowPlaying | null) => void;
+  setEqEnabled: (v: boolean) => void;
+  setEqGains: (gains: number[]) => void;
+  setEqGain: (index: number, value: number) => void;
+  setEqPreset: (preset: string) => void;
+  setBassBoost: (v: boolean) => void;
+  setSpatialEnabled: (v: boolean) => void;
+  setNightMode: (v: boolean) => void;
+  setBufferPreset: (p: BufferPreset) => void;
+  setVisualizerEnabled: (v: boolean) => void;
+  setMiniOverlayOpen: (v: boolean) => void;
   importData: (data: {
     favorites?: string[];
     recentlyPlayed?: Station[];
@@ -276,6 +299,26 @@ function persistPlayStats(stats: PlayStats) {
   } catch {}
 }
 
+export const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+function loadEqGains(): number[] {
+  try {
+    const raw = localStorage.getItem('radio.eqGains');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length === 10 && arr.every((v) => typeof v === 'number' && v >= -12 && v <= 12)) return arr;
+    }
+  } catch {}
+  return Array(10).fill(0);
+}
+function loadBufferPreset(): BufferPreset {
+  try {
+    const v = localStorage.getItem('radio.bufferPreset');
+    if (v === 'low' || v === 'balanced' || v === 'high') return v;
+  } catch {}
+  return 'balanced';
+}
+
 export const useStore = create<AppState>((set, get) => ({
   allStations: [],
   currentStations: [],
@@ -319,6 +362,16 @@ export const useStore = create<AppState>((set, get) => ({
   myStations: loadMyStations(),
   myStationsOnly: loadMyStationsOnly(),
   playStats: loadPlayStats(),
+  nowPlaying: null,
+  eqEnabled: loadBoolean('radio.eqEnabled', false),
+  eqGains: loadEqGains(),
+  eqPreset: (() => { try { return localStorage.getItem('radio.eqPreset') || 'flat'; } catch { return 'flat'; } })(),
+  bassBoost: loadBoolean('radio.bassBoost', false),
+  spatialEnabled: loadBoolean('radio.spatialEnabled', false),
+  nightMode: loadBoolean('radio.nightMode', false),
+  bufferPreset: loadBufferPreset(),
+  visualizerEnabled: loadBoolean('radio.visualizerEnabled', true),
+  miniOverlayOpen: false,
 
   setAllStations: (stations) => set({ allStations: stations }),
   setCurrentStations: (stations) => set({ currentStations: stations }),
@@ -464,6 +517,22 @@ export const useStore = create<AppState>((set, get) => ({
     set({ playStats: {} });
     try { localStorage.removeItem(PLAY_STATS_KEY); } catch {}
   },
+  setNowPlaying: (nowPlaying) => set({ nowPlaying }),
+  setEqEnabled: (v) => { set({ eqEnabled: v }); try { localStorage.setItem('radio.eqEnabled', v ? '1' : '0'); } catch {} },
+  setEqGains: (gains) => { set({ eqGains: gains }); try { localStorage.setItem('radio.eqGains', JSON.stringify(gains)); } catch {} },
+  setEqGain: (index, value) => {
+    const next = [...get().eqGains];
+    next[index] = Math.max(-12, Math.min(12, value));
+    set({ eqGains: next, eqPreset: 'custom' });
+    try { localStorage.setItem('radio.eqGains', JSON.stringify(next)); localStorage.setItem('radio.eqPreset', 'custom'); } catch {}
+  },
+  setEqPreset: (preset) => { set({ eqPreset: preset }); try { localStorage.setItem('radio.eqPreset', preset); } catch {} },
+  setBassBoost: (v) => { set({ bassBoost: v }); try { localStorage.setItem('radio.bassBoost', v ? '1' : '0'); } catch {} },
+  setSpatialEnabled: (v) => { set({ spatialEnabled: v }); try { localStorage.setItem('radio.spatialEnabled', v ? '1' : '0'); } catch {} },
+  setNightMode: (v) => { set({ nightMode: v }); try { localStorage.setItem('radio.nightMode', v ? '1' : '0'); } catch {} },
+  setBufferPreset: (p) => { set({ bufferPreset: p }); try { localStorage.setItem('radio.bufferPreset', p); } catch {} },
+  setVisualizerEnabled: (v) => { set({ visualizerEnabled: v }); try { localStorage.setItem('radio.visualizerEnabled', v ? '1' : '0'); } catch {} },
+  setMiniOverlayOpen: (v) => set({ miniOverlayOpen: v }),
   importData: (data) => {
     const s = get();
     if (data.favorites) {

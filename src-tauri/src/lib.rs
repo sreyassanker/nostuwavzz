@@ -1,6 +1,9 @@
 use chrono::Utc;
+use futures_util::StreamExt;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -50,8 +53,32 @@ pub struct SyncProgress {
     pub phase: String,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct NowPlayingMeta {
+    pub stationuuid: String,
+    pub title: String,
+    pub artist: Option<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ProbeResult {
+    pub ok: bool,
+    pub latency_ms: Option<u64>,
+    pub content_type: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct HealthEntry {
+    pub ok: bool,
+    pub latency_ms: Option<i64>,
+    pub checked_at: Option<String>,
+}
+
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
+    pub metadata_gen: Arc<AtomicU64>,
 }
 
 fn init_db(conn: &Connection) -> Result<(), String> {
@@ -101,6 +128,13 @@ fn init_db(conn: &Connection) -> Result<(), String> {
         CREATE TABLE IF NOT EXISTS sync_meta (
             key TEXT PRIMARY KEY,
             value TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS station_health (
+            stationuuid TEXT PRIMARY KEY,
+            ok INTEGER NOT NULL,
+            latency_ms INTEGER,
+            checked_at TEXT DEFAULT (datetime('now'))
         );"
     ).map_err(|e| e.to_string())?;
 
@@ -792,6 +826,375 @@ async fn get_last_played(state: State<'_, AppState>) -> Result<Option<Station>, 
     }
 }
 
+fn stream_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .user_agent("NostuWavzz/3.0 (Tauri; +https://github.com/sreyassanker/nostuwavzz)")
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+fn parse_stream_title(meta: &str) -> Option<(String, Option<String>)> {
+    let marker = "StreamTitle='";
+    let start = meta.find(marker)? + marker.len();
+    let rest = &meta[start..];
+    let end = rest.find("';")? + start;
+    let raw = meta[start..end].trim();
+    if raw.is_empty() {
+        return None;
+    }
+    match raw.split_once(" - ") {
+        Some((artist, title))
+            if !artist.trim().is_empty() && !title.trim().is_empty() =>
+        {
+            Some((title.trim().to_string(), Some(artist.trim().to_string())))
+        }
+        _ => Some((raw.to_string(), None)),
+    }
+}
+
+fn origin_of(url: &str) -> Option<String> {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    let host = parsed.host_str()?;
+    let port = parsed.port();
+    let base = match (parsed.scheme(), port) {
+        ("http", Some(80)) | ("http", None) => format!("http://{}", host),
+        ("https", Some(443)) | ("https", None) => format!("https://{}", host),
+        (scheme, p) => format!("{}://{}:{}", scheme, host, p.unwrap_or(80)),
+    };
+    Some(base)
+}
+
+/// Streams the broadcast side-channel and parses ICY metadata blocks.
+/// Returns false when the server does not support ICY metadata.
+async fn run_icy_monitor(
+    app: AppHandle,
+    gen_arc: Arc<AtomicU64>,
+    gen: u64,
+    url: String,
+    uuid: String,
+) -> bool {
+    let client = match stream_client() {
+        Ok(c) => c,
+        Err(_) => return true,
+    };
+
+    let resp = match client
+        .get(&url)
+        .header("Icy-MetaData", "1")
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return true,
+    };
+
+    let metaint: usize = match resp
+        .headers()
+        .get("icy-metaint")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse().ok())
+    {
+        Some(m) if m > 0 && m <= 64 * 1024 => m,
+        _ => return false,
+    };
+
+    let mut stream = resp.bytes_stream();
+    let mut audio_left = metaint;
+    let mut read_meta_len = false;
+    let mut meta_left = 0usize;
+    let mut meta_buf: Vec<u8> = Vec::new();
+
+    loop {
+        let chunk = match tokio::time::timeout(Duration::from_secs(30), stream.next()).await {
+            Ok(Some(Ok(bytes))) => bytes,
+            _ => break,
+        };
+
+        if gen != gen_arc.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let mut i = 0usize;
+        while i < chunk.len() {
+            if read_meta_len {
+                let n = (chunk[i] as usize) * 16;
+                i += 1;
+                read_meta_len = false;
+                if n == 0 {
+                    audio_left = metaint;
+                    continue;
+                }
+                meta_left = n;
+                meta_buf.clear();
+                continue;
+            }
+            if meta_left > 0 {
+                let take = meta_left.min(chunk.len() - i);
+                meta_buf.extend_from_slice(&chunk[i..i + take]);
+                i += take;
+                meta_left -= take;
+                if meta_left == 0 {
+                    let text = String::from_utf8_lossy(&meta_buf).to_string();
+                    if let Some((title, artist)) = parse_stream_title(&text) {
+                        app.emit(
+                            "metadata-update",
+                            NowPlayingMeta {
+                                stationuuid: uuid.clone(),
+                                title,
+                                artist,
+                                source: "icy".into(),
+                            },
+                        )
+                        .ok();
+                    }
+                    audio_left = metaint;
+                }
+                continue;
+            }
+            let take = audio_left.min(chunk.len() - i);
+            i += take;
+            audio_left -= take;
+            if audio_left == 0 {
+                read_meta_len = true;
+            }
+        }
+    }
+
+    true
+}
+
+async fn fetch_icecast_title(client: &reqwest::Client, origin: &str) -> Option<String> {
+    let resp = client
+        .get(format!("{}/status-json.xsl", origin))
+        .timeout(Duration::from_secs(4))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let v: serde_json::Value = resp.json().await.ok()?;
+    let source = v.get("icestats")?.get("source")?;
+    let entry = match source {
+        serde_json::Value::Array(arr) => arr.first()?,
+        _ => source,
+    };
+    let title = entry.get("title")?.as_str()?.trim().to_string();
+    if title.is_empty() {
+        None
+    } else {
+        Some(title)
+    }
+}
+
+async fn fetch_shoutcast_title(client: &reqwest::Client, origin: &str) -> Option<String> {
+    let resp = client
+        .get(format!("{}/7.html", origin))
+        .timeout(Duration::from_secs(4))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let text = resp.text().await.ok()?;
+    let body = text.split("<body>").nth(1)?;
+    let body = body.split("</body>").next()?;
+    let parts: Vec<&str> = body.split(',').collect();
+    if parts.len() < 6 {
+        return None;
+    }
+    let title = parts[5..].join(",").trim().to_string();
+    if title.is_empty() {
+        None
+    } else {
+        Some(title)
+    }
+}
+
+async fn run_poll_monitor(app: AppHandle, gen_arc: Arc<AtomicU64>, gen: u64, url: String, uuid: String) {
+    let origin = match origin_of(&url) {
+        Some(o) => o,
+        None => return,
+    };
+    let client = match stream_client() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut last_title = String::new();
+    loop {
+        if gen != gen_arc.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let mut title = fetch_icecast_title(&client, &origin).await;
+        if title.is_none() {
+            title = fetch_shoutcast_title(&client, &origin).await;
+        }
+
+        if let Some(title) = title {
+            if title != last_title && gen == gen_arc.load(Ordering::SeqCst) {
+                let (t, artist) = match parse_stream_title(&format!("StreamTitle='{}';", title)) {
+                    Some((t, a)) => (t, a),
+                    None => (title.clone(), None),
+                };
+                app.emit(
+                    "metadata-update",
+                    NowPlayingMeta {
+                        stationuuid: uuid.clone(),
+                        title: t,
+                        artist,
+                        source: "poll".into(),
+                    },
+                )
+                .ok();
+                last_title = title;
+            }
+        }
+
+        for _ in 0..15 {
+            if gen != gen_arc.load(Ordering::SeqCst) {
+                return;
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+}
+
+#[tauri::command]
+async fn start_metadata_monitor(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+    stationuuid: String,
+) -> Result<(), String> {
+    let gen = state.metadata_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    let gen_arc = state.metadata_gen.clone();
+    tauri::async_runtime::spawn(async move {
+        if !run_icy_monitor(app.clone(), gen_arc.clone(), gen, url.clone(), stationuuid.clone()).await {
+            run_poll_monitor(app, gen_arc, gen, url, stationuuid).await;
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_metadata_monitor(state: State<'_, AppState>) -> Result<(), String> {
+    state.metadata_gen.fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+async fn probe_station(
+    state: State<'_, AppState>,
+    url: String,
+    stationuuid: Option<String>,
+) -> Result<ProbeResult, String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("unsupported scheme".into());
+    }
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(7))
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        )
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let start = std::time::Instant::now();
+    let attempt: Result<ProbeResult, String> = async {
+        let resp = client
+            .get(&url)
+            .header("Range", "bytes=0-16383")
+            .send()
+            .await
+            .map_err(|e| format!("{}", e))?;
+        if !resp.status().is_success() {
+            return Err(format!("http {}", resp.status().as_u16()));
+        }
+        let latency_ms = start.elapsed().as_millis() as u64;
+        let content_type = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let _ = resp.bytes().await.map_err(|e| format!("{}", e))?;
+        Ok(ProbeResult {
+            ok: true,
+            latency_ms: Some(latency_ms),
+            content_type,
+            error: None,
+        })
+    }
+    .await;
+
+    let result = attempt.unwrap_or_else(|e| ProbeResult {
+        ok: false,
+        latency_ms: None,
+        content_type: None,
+        error: Some(e),
+    });
+
+    if let Some(uuid) = stationuuid {
+        let db = state.db.lock().await;
+        let _ = db.execute(
+            "INSERT OR REPLACE INTO station_health (stationuuid, ok, latency_ms, checked_at)
+             VALUES (?1, ?2, ?3, datetime('now'))",
+            params![uuid, result.ok as i64, result.latency_ms.map(|v| v as i64)],
+        );
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+async fn get_station_health(
+    state: State<'_, AppState>,
+    uuids: Vec<String>,
+) -> Result<HashMap<String, HealthEntry>, String> {
+    if uuids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let db = state.db.lock().await;
+    let placeholders = uuids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT stationuuid, ok, latency_ms, checked_at FROM station_health
+         WHERE stationuuid IN ({}) AND checked_at > datetime('now', '-7 days')",
+        placeholders
+    );
+    let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        uuids.iter().map(|u| u as &dyn rusqlite::types::ToSql).collect();
+    let map = stmt
+        .query_map(param_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                HealthEntry {
+                    ok: row.get::<_, i64>(1)? != 0,
+                    latency_ms: row.get(2)?,
+                    checked_at: row.get(3)?,
+                },
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect::<HashMap<_, _>>();
+    Ok(map)
+}
+
 #[cfg(not(mobile))]
 fn setup_background_sync(app: AppHandle) {    let handle = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -876,6 +1279,7 @@ pub fn run() {
 
             app.manage(AppState {
                 db: Arc::new(Mutex::new(conn)),
+                metadata_gen: Arc::new(AtomicU64::new(0)),
             });
 
             #[cfg(not(mobile))]
@@ -896,6 +1300,10 @@ pub fn run() {
             fetch_image,
             set_last_played,
             get_last_played,
+            start_metadata_monitor,
+            stop_metadata_monitor,
+            probe_station,
+            get_station_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

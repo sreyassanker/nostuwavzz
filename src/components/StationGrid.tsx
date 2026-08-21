@@ -40,7 +40,7 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
 
   const density = useStore((s) => s.density);
   const densityFactor = density === 'compact' ? 0.85 : density === 'cozy' ? 1.15 : 1;
-  const ROW_HEIGHT = Math.round(112 * densityFactor + 8);
+  const ROW_HEIGHT = Math.round(160 * densityFactor + 14);
 
   const [columns, setColumns] = useState(3);
   const showGrid = stations.length > 0 && !initialSync;
@@ -49,8 +49,8 @@ export default function StationGrid({ stations, onStationClick, onClearFilters, 
     const el = scrollRef.current;
     if (!el) return;
     const update = () => {
-      const gap = 10;
-      const minCard = 148;
+      const gap = 14;
+      const minCard = 140;
       const width = el.clientWidth - 48;
       const cols = Math.max(1, Math.min(4, Math.floor((width + gap) / (minCard + gap))));
       setColumns(cols);

@@ -1,10 +1,12 @@
-import { Radio, Heart, Settings2, Archive } from 'lucide-react';
+import { Radio, Heart, Settings2, Archive, Globe, BarChart3 } from 'lucide-react';
 import { useStore, type ActiveTab } from '../store/store';
 
 const TABS: { key: ActiveTab; label: string; icon: typeof Radio }[] = [
   { key: 'discover', label: 'Discover', icon: Radio },
+  { key: 'globe', label: 'Globe', icon: Globe },
   { key: 'favorites', label: 'Favorites', icon: Heart },
   { key: 'mine', label: 'Mine', icon: Archive },
+  { key: 'stats', label: 'Stats', icon: BarChart3 },
   { key: 'settings', label: 'Settings', icon: Settings2 },
 ];
 

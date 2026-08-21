@@ -13,6 +13,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ListMusic,
+  SlidersHorizontal,
+  Zap,
+  Orbit,
+  Moon,
+  Waves,
+  BarChart3,
 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { audioEngine } from '../lib/audioEngine';
@@ -21,6 +27,9 @@ import { useSleepTimer } from '../lib/useSleepTimer';
 import StationLogo from './StationLogo';
 import type { Station } from '../types';
 import { useFocusTrap } from '../lib/useFocusTrap';
+import AudioVisualizer from './AudioVisualizer';
+import { EQ_PRESETS, PRESET_ORDER } from '../lib/eqPresets';
+import { EQ_FREQUENCIES } from '../store/store';
 
 const VOLUME_KEY = 'radio.volume';
 const SLEEP_OPTIONS = [15, 30, 60, 90];
@@ -42,6 +51,25 @@ export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerShe
   const setFavoriteUuids = useStore((s) => s.setFavoriteUuids);
   const addToast = useStore((s) => s.addToast);
   const queue = useStore((s) => s.queue);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const eqEnabled = useStore((s) => s.eqEnabled);
+  const eqGains = useStore((s) => s.eqGains);
+  const eqPreset = useStore((s) => s.eqPreset);
+  const bassBoost = useStore((s) => s.bassBoost);
+  const spatialEnabled = useStore((s) => s.spatialEnabled);
+  const nightMode = useStore((s) => s.nightMode);
+  const bufferPreset = useStore((s) => s.bufferPreset);
+  const visualizerEnabled = useStore((s) => s.visualizerEnabled);
+  const setEqEnabled = useStore((s) => s.setEqEnabled);
+  const setEqGains = useStore((s) => s.setEqGains);
+  const setEqGain = useStore((s) => s.setEqGain);
+  const setEqPreset = useStore((s) => s.setEqPreset);
+  const setBassBoost = useStore((s) => s.setBassBoost);
+  const setSpatialEnabled = useStore((s) => s.setSpatialEnabled);
+  const setNightMode = useStore((s) => s.setNightMode);
+  const setBufferPreset = useStore((s) => s.setBufferPreset);
+  const setVisualizerEnabled = useStore((s) => s.setVisualizerEnabled);
+  const [eqOpen, setEqOpen] = useState(false);
   const removeFromQueue = useStore((s) => s.removeFromQueue);
   const clearQueue = useStore((s) => s.clearQueue);
   const { handleSleep } = useSleepTimer();
@@ -267,6 +295,10 @@ export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerShe
 
   const stationName = station?.name || 'Select a station';
   const marquee = stationName.length > 26;
+  const liveTitle =
+    nowPlaying && station && nowPlaying.stationuuid === station.stationuuid
+      ? nowPlaying
+      : null;
 
   const renderQueueMenu = (withRef?: (el: HTMLDivElement | null) => void) => (
     <div ref={withRef} className="sleep-menu sleep-menu--open queue-menu" role="menu" aria-label="Up next">
@@ -393,7 +425,12 @@ export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerShe
               </span>
             </div>
             <div className="player-sheet__meta">
-              {player.isPlaying && buffering ? (
+              {liveTitle && player.isPlaying ? (
+                <span className="player-sheet__live">
+                  ♪ {liveTitle.artist ? `${liveTitle.artist} — ` : ''}
+                  {liveTitle.title}
+                </span>
+              ) : player.isPlaying && buffering ? (
                 <span className="player-banner">Buffering…</span>
               ) : metaParts.length > 0 ? (
                 metaParts.join(' · ')
@@ -528,6 +565,12 @@ export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerShe
                   </div>
 
                   <div className="full-player__title">{station.name}</div>
+                  {liveTitle && player.isPlaying ? (
+                    <div className="full-player__live">
+                      ♪ {liveTitle.artist ? `${liveTitle.artist} — ` : ''}
+                      {liveTitle.title}
+                    </div>
+                  ) : null}
                   <div className="full-player__meta">
                     {player.isPlaying && buffering ? (
                       <span className="player-banner player-banner--full">Buffering…</span>
@@ -545,6 +588,186 @@ export default function PlayerSheet({ onPrev, onNext, onPlayStation }: PlayerShe
                       ))}
                     </div>
                   ) : null}
+
+                  {/* Visualizer */}
+                  <div className="fp-viz">
+                    <div className="fp-viz__head">
+                      <span className="fp-viz__label"><BarChart3 size={12} strokeWidth={2} aria-hidden="true" /> Visualizer</span>
+                      <button
+                        type="button"
+                        className={`fp-viz__toggle ${visualizerEnabled ? 'is-on' : ''}`}
+                        onClick={() => {
+                          const next = !visualizerEnabled;
+                          setVisualizerEnabled(next);
+                          audioEngine.setVisualizerEnabled(next);
+                        }}
+                        aria-pressed={visualizerEnabled}
+                        title={visualizerEnabled ? 'Hide visualizer' : 'Show visualizer'}
+                      >
+                        {visualizerEnabled ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                    {visualizerEnabled && (
+                      <div className="fp-viz__canvas">
+                        <AudioVisualizer height={52} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Audio FX strip — bass / spatial / night / EQ */}
+                  <div className="fp-fx">
+                    <button
+                      type="button"
+                      className={`fp-chip ${bassBoost ? 'is-active' : ''}`}
+                      onClick={() => {
+                        const next = !bassBoost;
+                        setBassBoost(next);
+                        audioEngine.setBassBoost();
+                      }}
+                      aria-pressed={bassBoost}
+                      title="Bass boost (+10 dB low shelf)"
+                    >
+                      <Zap size={13} strokeWidth={2} aria-hidden="true" /> Bass
+                    </button>
+                    <button
+                      type="button"
+                      className={`fp-chip ${spatialEnabled ? 'is-active' : ''}`}
+                      onClick={() => {
+                        const next = !spatialEnabled;
+                        setSpatialEnabled(next);
+                        audioEngine.setSpatialEnabled();
+                      }}
+                      aria-pressed={spatialEnabled}
+                      title="Spatial widening"
+                    >
+                      <Orbit size={13} strokeWidth={2} aria-hidden="true" /> Spatial
+                    </button>
+                    <button
+                      type="button"
+                      className={`fp-chip ${nightMode ? 'is-active' : ''}`}
+                      onClick={() => {
+                        const next = !nightMode;
+                        setNightMode(next);
+                        audioEngine.setNightMode();
+                      }}
+                      aria-pressed={nightMode}
+                      title="Night mode — dynamic compression"
+                    >
+                      <Moon size={13} strokeWidth={2} aria-hidden="true" /> Night
+                    </button>
+                    <button
+                      type="button"
+                      className={`fp-chip ${eqEnabled ? 'is-active' : ''}`}
+                      onClick={() => {
+                        if (!eqEnabled) {
+                          setEqEnabled(true);
+                          audioEngine.setEqEnabled(true);
+                          setEqOpen(true);
+                        } else {
+                          setEqOpen((v) => !v);
+                        }
+                      }}
+                      aria-pressed={eqEnabled}
+                      aria-expanded={eqOpen}
+                    >
+                      <SlidersHorizontal size={13} strokeWidth={2} aria-hidden="true" /> EQ
+                    </button>
+                    <button
+                      type="button"
+                      className={`fp-chip ${visualizerEnabled ? 'is-active' : ''}`}
+                      onClick={() => {
+                        const next = !visualizerEnabled;
+                        setVisualizerEnabled(next);
+                        audioEngine.setVisualizerEnabled(next);
+                      }}
+                      aria-pressed={visualizerEnabled}
+                    >
+                      <Waves size={13} strokeWidth={2} aria-hidden="true" /> Viz
+                    </button>
+                  </div>
+
+                  {/* Buffer preset */}
+                  <div className="fp-buffer">
+                    <span className="fp-buffer__label">Buffer</span>
+                    <div className="fp-buffer__seg" role="group" aria-label="Buffer preset">
+                      {(['low', 'balanced', 'high'] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`fp-buffer__btn ${bufferPreset === p ? 'is-active' : ''}`}
+                          onClick={() => setBufferPreset(p)}
+                          aria-pressed={bufferPreset === p}
+                        >
+                          {p === 'low' ? 'Low' : p === 'balanced' ? 'Balanced' : 'High'}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="fp-buffer__hint">
+                      {bufferPreset === 'low' ? '1.5s · fastest' : bufferPreset === 'high' ? '6s · stable' : '3s · balanced'}
+                    </span>
+                  </div>
+
+                  {/* Equalizer panel */}
+                  {eqEnabled && eqOpen && (
+                    <div className="fp-eq">
+                      <div className="fp-eq__head">
+                        <span className="fp-eq__title">Equalizer</span>
+                        <div className="fp-eq__presets" role="group" aria-label="EQ presets">
+                          {PRESET_ORDER.map((key) => (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`fp-eq__preset ${eqPreset === key ? 'is-active' : ''}`}
+                              onClick={() => {
+                                const preset = EQ_PRESETS[key];
+                                if (!preset) return;
+                                setEqGains(preset.gains);
+                                setEqPreset(key);
+                                audioEngine.setEqGains(preset.gains);
+                              }}
+                            >
+                              {EQ_PRESETS[key].label}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="fp-eq__off"
+                          onClick={() => {
+                            setEqEnabled(false);
+                            audioEngine.setEqEnabled(false);
+                            setEqOpen(false);
+                          }}
+                        >
+                          Off
+                        </button>
+                      </div>
+                      <div className="fp-eq__sliders">
+                        {EQ_FREQUENCIES.map((freq, i) => (
+                          <div key={freq} className="fp-eq__col">
+                            <div className="fp-eq__track">
+                              <input
+                                type="range"
+                                min={-12}
+                                max={12}
+                                step={1}
+                                value={eqGains[i] ?? 0}
+                                onChange={(e) => {
+                                  const v = parseInt(e.target.value, 10);
+                                  setEqGain(i, v);
+                                  audioEngine.setEqGain(i, v);
+                                }}
+                                aria-label={`${freq} Hz`}
+                                className="fp-eq__range"
+                              />
+                              <span className="fp-eq__val">{eqGains[i] > 0 ? `+${eqGains[i]}` : eqGains[i]}</span>
+                            </div>
+                            <span className="fp-eq__freq">{freq >= 1000 ? `${freq / 1000}k` : freq}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="full-player__transport">
                     <button type="button" className="player-btn" onClick={onPrev} aria-label="Previous station" title="Previous station">
