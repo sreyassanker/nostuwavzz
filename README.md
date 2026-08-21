@@ -46,13 +46,14 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 
 ### Discovery
 - **50,000+ stations** — full index sourced from the community-run [radio-browser.info](https://radio-browser.info) directory
-- **Interactive 3D Globe** — stations plotted by real coordinates; tap a dot to listen instantly
 - **Full-text search** — press `Ctrl+K` / `Cmd+K` anywhere, search by name, country, genre, or language
 - **Smart filters** — filter by continent, country, tag/genre, or favorites
 - **Top charts** — stations ordered by real click-count popularity
+- **My Stations** — create and manage your own custom station list
 
 ### Playback
 - **Bottom-sheet player** — a persistent mini pill that expands into a full player; swipe left/right to skip between stations, spin the artwork ring while playing
+- **Mini overlay** — a compact floating player that stays visible while browsing the globe or other tabs
 - **Lock-screen & notification controls** — native Android media notification with play/pause/next/previous, artwork, and hardware-button support
 - **Audio focus** — playback pauses automatically when a call or another app takes audio, and resumes when you regain focus
 - **Auto-resume on reconnect** — plug your headphones or reconnect your Bluetooth earbuds and playback picks right back up
@@ -72,6 +73,26 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 - **Data saver mode** — skip station-logo downloads on cellular connections
 - **Favorites** — one-tap heart, persisted across sessions
 
+### Audio FX
+- **10-band equalizer** — full parametric EQ with presets (Flat, Bass Boost, Vocal, Jazz, Classical, etc.)
+- **Bass boost** — +10 dB low-shelf filter for punchy low end
+- **Spatial audio** — stereo widening for a more immersive listening experience
+- **Night mode** — dynamic compression that evens out volume spikes for late-night listening
+- **Buffer presets** — low (1.5s), balanced (3s), or high (6s) buffer for different network conditions
+- **Live visualizer** — real-time waveform visualization in the full player
+
+### Globe & Discovery
+- **Interactive 3D Globe** — stations plotted as glowing spheres with continent-colored rim lighting and day/night terminator shadow
+- **Playing station animation** — concentric ring waves pulse outward from the currently playing station, colored to match its continent
+- **Station info on tap** — tap any globe dot to see station details and play instantly
+- **Tooltip hover** — hover over any station on the globe for a quick name/bitrate preview
+
+### Stats Dashboard
+- **Play counts** — see how many times you've played each station
+- **Listening time** — track total minutes per station
+- **Top countries** — discover which countries you listen to most
+- **Recently played** — quick access to your latest stations with play counts
+
 ### Experience & Polish
 - **Dynamic accent from station art** — the app colors itself with the dominant color of the currently playing station's artwork
 - **Pure black (AMOLED) mode** — deep-black backgrounds for OLED screens in dark mode
@@ -79,6 +100,7 @@ Built with **Tauri v2**, **React 19**, **TypeScript**, and **Rust** — fast, li
 - **Shimmer skeletons** — smooth loading placeholders while the station catalog syncs
 - **Searchable settings** — find any setting instantly; grouped list-cards with a compact / normal / cozy density scale
 - **Light & dark themes** — follow your system, or pick manually
+- **Uniform card grid** — discover tab uses a fixed 2-column layout with consistent card heights
 
 ### Privacy
 - No accounts, no tracking, no ads
@@ -125,8 +147,11 @@ NostuWavzz/
 │   │   ├── StationCard.tsx    # Single station card
 │   │   ├── RecentRow.tsx      # "Recently played" home row
 │   │   ├── StationLogo.tsx    # Lazy favicon with data-saver support
-│   │   ├── GlobeView.tsx      # 3D globe, tooltips, now-playing marker
-│   │   ├── PlayerSheet.tsx    # Bottom-sheet player: mini pill + full player, swipe-to-switch
+│   │   ├── GlobeView.tsx      # 3D globe with sphere points, rings, day/night, starfield
+│   │   ├── PlayerSheet.tsx    # Bottom-sheet player with EQ, bass boost, visualizer
+│   │   ├── MiniOverlay.tsx    # Compact floating player overlay
+│   │   ├── AudioVisualizer.tsx # Real-time waveform visualization
+│   │   ├── StatsDashboard.tsx # Play counts, listening time, top countries
 │   │   ├── MobileTabBar.tsx   # Mobile bottom navigation
 │   │   ├── SearchModal.tsx    # ⌘K quick-search overlay
 │   │   ├── StationInfoModal.tsx  # Station detail dialog
@@ -137,7 +162,9 @@ NostuWavzz/
 │   │   ├── api.ts             # radio-browser.info client, normalizers, continent mapping
 │   │   ├── fetchStations.ts   # Batch downloader (4 mirrors, 1K/batch, ≤50K)
 │   │   ├── filter.ts          # Shared filter logic (used by worker + main thread)
-│   │   ├── audioEngine.ts     # Audio engine: configurable crossfade, fade-out, stall recovery, media session
+│   │   ├── audioEngine.ts     # Audio engine: EQ, bass boost, spatial, night mode, crossfade
+│   │   ├── eqPresets.ts       # Equalizer preset definitions (Flat, Bass Boost, etc.)
+│   │   ├── metadata.ts        # ICY/Icecast metadata monitor for live track info
 │   │   ├── mediaSession.ts    # Native Android media-session bridge (tauri-plugin)
 │   │   ├── colorExtract.ts    # Dominant-color extraction from station artwork (accent theme)
 │   │   ├── stationCache.ts    # IndexedDB station persistence
