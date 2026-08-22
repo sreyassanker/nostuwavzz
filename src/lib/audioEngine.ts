@@ -6,6 +6,7 @@ import {
   clear,
   initialize as initNativeSession,
   isTauriAndroid as useNativeMediaSession,
+  ensureMediaSessionInitialized,
 } from './mediaSession';
 
 export type MediaActionHandler = () => void;
@@ -309,7 +310,13 @@ export class AudioEngine extends EventTarget {
   }
 
   private setupNativeSession() {
-    initNativeSession().catch(() => {});
+    initNativeSession()
+      .then(() => {
+        console.log('[AudioEngine] Native media session initialized');
+      })
+      .catch((err) => {
+        console.warn('[AudioEngine] Native media session init failed (will retry on first play):', err);
+      });
     onAction((event) => {
       switch (event.action) {
         case 'play':
@@ -338,7 +345,9 @@ export class AudioEngine extends EventTarget {
       .then((listener) => {
         this.nativeListener = listener;
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('[AudioEngine] Failed to register media action listener:', err);
+      });
   }
 
   private setPlaybackStatePlaying() {
@@ -871,6 +880,22 @@ export class AudioEngine extends EventTarget {
     // If we had playback active and the element is now paused, try to resume it.
     if (this.playbackActive && this.audio.paused && this.currentUrl && !this.reconnecting) {
       void this.audio.play().catch((err) => this.handlePlayError(err));
+    }
+  }
+
+  /**
+   * Re-initialize the native media session (useful if initial init failed or permissions changed).
+   * Returns true if initialization succeeded.
+   */
+  async reinitializeMediaSession(): Promise<boolean> {
+    if (!useNativeMediaSession) return false;
+    try {
+      await ensureMediaSessionInitialized();
+      console.log('[AudioEngine] Media session re-initialized successfully');
+      return true;
+    } catch (err) {
+      console.error('[AudioEngine] Media session re-initialization failed:', err);
+      return false;
     }
   }
 }

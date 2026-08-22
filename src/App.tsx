@@ -2,6 +2,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store/store';
 import { audioEngine } from './lib/audioEngine';
+import { ensureMediaSessionInitialized } from './lib/mediaSession';
 import { fetchAllStations, TARGET_STATIONS, type FetchProgressCallback } from './lib/fetchStations';
 import { loadAllStations, saveStationsBatch, setLastSyncTime, getLastSyncTime } from './lib/stationCache';
 import { filterStations } from './lib/filter';
@@ -514,10 +515,40 @@ export default function App() {
       if (document.visibilityState === 'visible') {
         // App came back to foreground — resume audio context if it was suspended
         audioEngine.resumeAudioContext();
+        // Also reinitialize media session in case notification permission was granted while backgrounded
+        audioEngine.reinitializeMediaSession();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  // Resume audio context when tab changes (e.g. after navigating to another page)
+  useEffect(() => {
+    audioEngine.resumeAudioContext();
+  }, [activeTab]);
+
+  // Initialize native media session for Android status bar / lock screen controls
+  useEffect(() => {
+    let mounted = true;
+    ensureMediaSessionInitialized()
+      .then((success) => {
+        if (mounted) {
+          if (success) {
+            console.log('[App] Native media session initialized for Android status bar features');
+          } else {
+            console.log('[App] Native media session not available (not Tauri Android)');
+          }
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          console.warn('[App] Failed to initialize native media session:', err);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleClearFilters = useCallback(() => {

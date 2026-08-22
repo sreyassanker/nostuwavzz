@@ -39,7 +39,13 @@ export async function clear(): Promise<void> {
 }
 
 export async function initialize(): Promise<void> {
-  await invoke('plugin:media-session|initialize');
+  try {
+    await invoke('plugin:media-session|initialize');
+    console.log('[MediaSession] Native media session initialized successfully');
+  } catch (error) {
+    console.error('[MediaSession] Failed to initialize native media session:', error);
+    throw error;
+  }
 }
 
 export async function onAction(
@@ -53,3 +59,13 @@ export const isTauriAndroid =
   '__TAURI_INTERNALS__' in window &&
   typeof navigator !== 'undefined' &&
   /Android/i.test(navigator.userAgent);
+
+export async function ensureMediaSessionInitialized(): Promise<boolean> {
+  if (!isTauriAndroid) return false;
+  try {
+    await initialize();
+    return true;
+  } catch {
+    return false;
+  }
+}
